@@ -1,7 +1,7 @@
 #include "mpu6050/mpu6050.h"
 #include "iic/bsp_hard_i2c.h"
 #include "delay.h"
-#include "bsp_debug_usart.h"
+#include "usart/bsp_debug_usart.h"
 void MPU6050_WriteReg(u8 reg_add,u8 reg_dat)
 {
     I2C_ByteWrite(reg_dat,reg_add);
@@ -14,11 +14,18 @@ void MPU6050_ReadData(u8 reg_add,unsigned char*Read,u8 num)
 void MPU6050_Init(void)
 {
 	Delay(100); 
-	MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x00);	    //解除休眠状态
-	MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV , 0x07);	    //陀螺仪采样率，1KHz
-	MPU6050_WriteReg(MPU6050_RA_CONFIG , 0x06);	        //低通滤波器的设置，截止频率是1K，带宽是5K
-	MPU6050_WriteReg(MPU6050_RA_ACCEL_CONFIG , 0x00);	  //配置加速度传感器工作在2G模式，不自检
-	MPU6050_WriteReg(MPU6050_RA_GYRO_CONFIG, 0x18);     //陀螺仪自检及测量范围，典型值：0x18(不自检，2000deg/s)
+	MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x01);
+	MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_2, 0x00);
+	MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV, 0x07);
+	MPU6050_WriteReg(MPU6050_RA_CONFIG, 0x00);
+	MPU6050_WriteReg(MPU6050_RA_GYRO_CONFIG, 0x18);
+	MPU6050_WriteReg(MPU6050_RA_ACCEL_CONFIG, 0x18);
+
+    // MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x00);      //解除休眠状态
+    // MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV , 0x09);     //陀螺仪采样率，1KHz
+    // MPU6050_WriteReg(MPU6050_RA_CONFIG , 0x06);         //低通滤波器的设置，截止频率是1K，带宽是5K
+    // MPU6050_WriteReg(MPU6050_RA_ACCEL_CONFIG , 0x18);     //配置加速度传感器工作在2G模式，不自检
+    // MPU6050_WriteReg(MPU6050_RA_GYRO_CONFIG, 0x18);     //陀螺仪自检及测量范围，典型值：0x18(不自检，2000deg/s)
 
 }
 

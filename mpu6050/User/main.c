@@ -1,15 +1,27 @@
 #include "stm32f10x_it.h"
 #include "stm32f10x.h"
 #include "main.h"
-#include "bsp_debug_usart.h"
-#include "iic/bsp_hard_i2c.h"
-#include "mpu6050/mpu6050.h"
-#include "delay.h"
-#include "math.h"
 
-#include "bsp_usart_blt.h"
-#include "bsp_hc05.h"
-#include "OLED.h"
+#include "delay.h"
+#include <math.h>
+
+
+#include "hc05/bsp_hc05.h"
+#include "iic/bsp_hard_i2c.h"
+
+#include "mpu6050/mpu6050.h"
+#include "oled/OLED.h"
+#include "timer/Timer.h"
+#include "usart/bsp_usart_blt.h"
+#include "usart/bsp_debug_usart.h"
+
+
+
+
+
+
+
+
 /**
   * @brief  主函数
   * @param  无  
@@ -18,21 +30,18 @@
 	
 /* MPU6050数据 */
 
-#define FILTER_ALPHA  0.70f  // 降低这个值，收敛变快；升高这个值，抗震动变强
+#define FILTER_ALPHA  0.01f  // 降低这个值，收敛变快；升高这个值，抗震动变强
 
 short Accel[3];
 short Gyro[3];
 short Temp;
-static float ax,ay,az;//加速度计的结果，单位g
-static float gx,gy,gz;//温度计的结果，单位摄氏度
-static float temperature;//单位°/s
-static float yaw,pitch,roll;//欧拉角单位°
+int16_t ax,ay,az;//加速度计的结果，单位g
+int16_t gx,gy,gz;//温度计的结果，单位摄氏度
 
-
-float Gyro_X_Offset = 0;
-float Gyro_Y_Offset = 0;
-float Gyro_Z_Offset = 0;
-
+float angleAcc=0;
+float angleGyro=0;
+float angle=0;
+uint32_t test;
 
 
 int main(void)
@@ -42,16 +51,18 @@ int main(void)
 	SystemClock_Config();         // SPL: 您自己写的 72MHz 时钟配置函数
 	SysTick_Config(SystemCoreClock/1000);
 	
-	OLED_Init(); 
-    OLED_ShowString(0, 0, "OLED Ready!", OLED_8X16);
-    OLED_Update(); // 先确认屏幕本身能亮
+//	OLED_Init(); 
+//	OLED_ShowString(0, 0, "OLED Ready!", OLED_8X16);
+//	OLED_Update();
 	
 	DEBUG_USART_Config();	
-	BLT_USART_Config();
+//	BLT_USART_Config();
 	
 	MPU_I2C_Config();
 	MPU6050_Init();
 	
+	
+	Timer_Init();
 	if(MPU6050ReadID() == 0)
 	{
 		printf("没有检测到MPU6050传感器\r\n");
@@ -61,88 +72,74 @@ int main(void)
 	{
 		printf("检测到MPU6050传感器\r\n");
 	}
-
-	//自动校准
-	// --- 开始校准 ---
-	printf("正在校准陀螺仪，请保持静止3秒...\r\n");
-	Delay(1000);
-	float sum_gx = 0, sum_gy = 0, sum_gz = 0;
-	// 循环采集 500 次数据
-	for(int i = 0; i < 500; i++)
-	{
-		// 读取原始数据（注意：这里要调用你代码里读取原始数据的函数）
-		// 假设你用的是 buffer 读取方式，这里简化逻辑，请根据你实际读取函数调整
-		uint8_t ReadBuffer[14];
-		MPU6050_ReadData(MPU6050_ACC_OUT, ReadBuffer, 14);
-		
-		// 拼接数据（直接使用原始数值，不要转成物理量）
-		short temp_gx = (ReadBuffer[8] << 8) + ReadBuffer[9];
-		short temp_gy = (ReadBuffer[10] << 8) + ReadBuffer[11];
-		short temp_gz = (ReadBuffer[12] << 8) + ReadBuffer[13];
-		
-		sum_gx += temp_gx;
-		sum_gy += temp_gy;
-		sum_gz += temp_gz;
-		
-		Delay(5); // 稍微延时，避免采样太快
-	}
-
-	// 计算平均偏移量
-	Gyro_X_Offset = sum_gx / 500.0f;
-	Gyro_Y_Offset = sum_gy / 500.0f;
-	Gyro_Z_Offset = sum_gz / 500.0f;
-
-	printf("校准完成！偏移量 X:%.2f Y:%.2f Z:%.2f\r\n", Gyro_X_Offset, Gyro_Y_Offset, Gyro_Z_Offset);
-	// --- 校准结束 ---
-	
-	
 	while (1)
 	{
-
-		OLED_Update(); // 必须调用这个函数，数据才会真正显示到屏幕上
         if (swTimers[0].flag)
 		{
 			swTimers[0].flag = 0;
 			MPU6050ReadAcc(Accel);
 			MPU6050ReadGyro(Gyro);
 			MPU6050ReadTemp(&Temp);
+			ax=Accel[0];
+			ay=Accel[1];
+			az=Accel[2];
+			gx=Gyro[0];
+			gy=Gyro[1];
+			gz=Gyro[2];
+			
+			gy+=22;//校准陀螺仪零偏
+			angleAcc=-atan2(ax,az)/3.14159*180;
+			angleGyro=angle+gy/32768.0*2000*0.001;
+			angle=FILTER_ALPHA*angleAcc+(1.0f-FILTER_ALPHA)*angleGyro;	
 		}
 		if(swTimers[1].flag)
 		{
 			swTimers[1].flag = 0;
-			ax=Accel[0]*6.1035e-5f;
-			ay=Accel[1]*6.1035e-5f;
-			az=Accel[2]*6.1035e-5f;
-			temperature=Temp/340+36.53;
-			//校正后结果
-			gx = (Gyro[0] - Gyro_X_Offset) * 6.1035e-2f;
-			gy = (Gyro[1] - Gyro_Y_Offset) * 6.1035e-2f;
-			gz = (Gyro[2] - Gyro_Z_Offset) * 6.1035e-2f;
-			//陀螺仪计算
-			float yaw_g=yaw+gz*0.005;
-			float pitch_g=pitch+gx*0.005;
-			float roll_g=roll-gy*0.005;
-			//加速度计算
-			float pitch_a=atan2(ay,az)/3.1415927*180.0f;
-			float roll_a=atan2(ax,az)/3.1415927*180.0f;
-			//前两者进行融合
-			yaw=yaw_g;
-			pitch = FILTER_ALPHA * pitch_g + (1.0f - FILTER_ALPHA) * pitch_a;
-			roll  = FILTER_ALPHA * roll_g  + (1.0f - FILTER_ALPHA) * roll_a;
+			printf("\r\nPlot： %f %f %f",angleAcc,angleGyro,angle);
 			
-//			printf("\r\n加速度： %f %f %f    ",ax,ay,az);
-//			printf("陀螺仪： %f %f %f    ",gx,gy,gz);
-//			printf("温度： %f°C",temperature);	
+			// ax=Accel[0]*6.1035e-5f;
+			// ay=Accel[1]*6.1035e-5f;
+			// az=Accel[2]*6.1035e-5f;
+			// gx=Gyro[0]*6.1035e-5f;
+			// gy=Gyro[1]*6.1035e-5f;
+			// gz=Gyro[2]*6.1035e-5f;
+			// temperature=Temp/340+36.53;
 
-            OLED_Clear(); 
-            OLED_Printf(0, 0, OLED_8X16, "Pitch: %.2f", pitch);
-            OLED_Printf(0, 18, OLED_8X16, "Roll:  %.2f", roll);
-            OLED_Printf(0, 36, OLED_8X16, "Yaw:   %.2f", yaw);
-			OLED_ShowString(0, 50, "Update Run!", OLED_6X8);
-			OLED_Update();
-			printf("\r\n偏航角： %f",yaw);
-			printf("俯仰角： %f",pitch);
-			printf("翻滚角： %f",roll);	
+			
+			
+			// printf("\r\nPlot： %d %d %d    ",gx,gy,gz);
+//			printf("\r\nPlot： %d    ",ax);
+//			printf("\r\nPlot： %d %d %d    ",gx,gy,gz);
+//			printf("\r\nPlot： %f    ",angleAcc);
+			
+			
+//			printf("陀螺仪： %f %f %f    ",gx,gy,gz);
+
+			// //陀螺仪计算
+			// float yaw_g=yaw+gz*0.005;
+			// float pitch_g=pitch+gx*0.005;
+			// float roll_g=roll-gy*0.005;
+			// //加速度计算
+			// float pitch_a=atan2(ay,az)/3.1415927*180.0f;
+			// float roll_a=atan2(ax,az)/3.1415927*180.0f;
+			// //前两者进行融合
+			// yaw=yaw_g;
+			// pitch = FILTER_ALPHA * pitch_g + (1.0f - FILTER_ALPHA) * pitch_a;
+			// roll  = FILTER_ALPHA * roll_g  + (1.0f - FILTER_ALPHA) * roll_a;
+			
+			// printf("\r\n加速度： %f %f %f    ",ax,ay,az);
+			// printf("陀螺仪： %f %f %f    ",gx,gy,gz);
+			// printf("温度： %f°C",temperature);	
+
+			// OLED_Clear(); 
+			// OLED_Printf(0, 0, OLED_8X16, "Pitch: %.2f", pitch);
+			// OLED_Printf(0, 18, OLED_8X16, "Roll:  %.2f", roll);
+			// OLED_Printf(0, 36, OLED_8X16, "Yaw:   %.2f", yaw);
+			// OLED_ShowString(0, 50, "Update Run!", OLED_6X8);
+			// OLED_Update();
+			// printf("\r\n偏航角： %f",yaw);
+			// printf("俯仰角： %f",pitch);
+			// printf("翻滚角： %f",roll);	
 		}
 
 	}

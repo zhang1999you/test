@@ -1,6 +1,6 @@
 
 #include "iic/bsp_hard_i2c.h"
-#include "bsp_debug_usart.h"
+#include "usart/bsp_debug_usart.h"
 #include "mpu6050/mpu6050.h"
 void MPU_I2C_Config(void)
 {

@@ -32,9 +32,11 @@
 ".\mpu6050.o"
 ".\bsp_hard_i2c.o"
 ".\bsp_hc05.o"
-".\bsp_usart_blt.o"
+".\bsp_soft_i2c.o"
 ".\oled.o"
 ".\oled_data.o"
+".\timer.o"
+".\bsp_usart_blt.o"
 --library_type=microlib --strict --scatter ".\fly.sct"
 --summary_stderr --info summarysizes --map --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

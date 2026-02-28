@@ -2,8 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 #include "stm32f10x.h"
-#include "bsp_usart_blt.h"
-#include "bsp_debug_usart.h"
+#include "usart/bsp_usart_blt.h"
+#include "usart/bsp_debug_usart.h"
 #include "delay.h"
 
 ReceiveData BLT_USART_ReceiveData;

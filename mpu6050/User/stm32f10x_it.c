@@ -25,13 +25,14 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x_it.h"
-extern volatile uint32_t TimingDelay;
+#include "delay.h"
 
 
-/* 定义两个定时器：一个 500ms、一个 1000ms */
+
+/* 定义两个定时器：一个 5ms、一个 50ms */
 volatile SwTimer_t swTimers[NUM_TIMERS] = {
-    { 5, 0, 0 },   // timers[0]：500?ms
-	{ 500, 0, 0 }, //打印速度
+    { 5, 0, 0 },   //5ms 定时器
+		{ 20, 0, 0 }, //打印速度
 };
 
 
@@ -159,6 +160,15 @@ void SysTick_Handler(void)
 	
 }
 
+
+void TIM1_UP_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM1, TIM_IT_Update) == SET)
+	{
+		
+		TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
+	}
+}
 /******************************************************************************/
 /*                 STM32F10x Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */

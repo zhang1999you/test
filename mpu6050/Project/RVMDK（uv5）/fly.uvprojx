@@ -361,7 +361,7 @@
             <uC99>1</uC99>
             <useXO>0</useXO>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>--no-multibyte-chars</MiscControls>
               <Define>STM32F10X_MD, USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
               <IncludePath>..\..\User;..\..\Libraries\FWlib\inc;..\..\Libraries\CMSIS;..\..\User\usart</IncludePath>
@@ -591,6 +591,36 @@
               <FileName>bsp_hard_i2c.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\User\iic\bsp_hard_i2c.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_hc05.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\hc05\bsp_hc05.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_soft_i2c.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\iic\bsp_soft_i2c.c</FilePath>
+            </File>
+            <File>
+              <FileName>OLED.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\oled\OLED.c</FilePath>
+            </File>
+            <File>
+              <FileName>OLED_Data.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\oled\OLED_Data.c</FilePath>
+            </File>
+            <File>
+              <FileName>Timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\timer\Timer.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_usart_blt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\usart\bsp_usart_blt.c</FilePath>
             </File>
           </Files>
         </Group>
