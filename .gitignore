@@ -1,48 +1,66 @@
-# Prerequisites
-*.d
+# =================================================
+# 1. 嵌入式开发 & Keil MDK 特定文件 (重点增加)
+# =================================================
+*.crf           # 交叉引用文件
+*.dep           # 依赖文件
+*.axf           # 镜像文件
+*.htm           # 编译报告
+*.lnp           # 链接器控制文件
+*.build_log.htm # 编译日志
+*.uvguix.* # Keil 界面布局 (个人设置)
+*.uvoptx        # Keil 选项设置 (个人设置)
+*._ia           # 编译器中间文件
+*.map           # 链接映射文件 (你已有 *.map)
+Listings/       # Keil 默认输出目录
+Objects/        # Keil 默认输出目录
+RTE/            # Keil 运行时环境配置
 
-# Object files
+# =================================================
+# 2. VS Code 个人设置 (建议过滤)
+# =================================================
+.vscode/
+
+# =================================================
+# 3. 你原本的通用规则 (已保留并整合)
+# =================================================
+# Prerequisites & Objects
+*.d
 *.o
 *.ko
 *.obj
 *.elf
 
-# Linker output
+# Linker & Executables
 *.ilk
-*.map
 *.exp
+*.exe
+*.out
+*.app
+*.hex
+*.i*86
+*.x86_64
 
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
+# Libraries & Shared objects
 *.lib
 *.a
 *.la
 *.lo
-
-# Shared objects (inc. Windows DLLs)
 *.dll
 *.so
 *.so.*
 *.dylib
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
+# Debug & Temp
+*.gch
+*.pch
 *.dSYM/
 *.su
 *.idb
 *.pdb
+*.bak
+*.tmp
 
-# Kernel Module Compile Results
+# Kernel Module
 *.mod*
 *.cmd
 .tmp_versions/
@@ -51,7 +69,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-# debug information files
-*.dwo
+# Media & Data
 *.mp4
 资料/
