@@ -14,8 +14,8 @@
 #include "timer/Timer.h"
 #include "usart/bsp_usart_blt.h"
 #include "usart/bsp_debug_usart.h"
-
-
+#include "motor/Motor.h"
+#include "motor/Encoder.h"
 
 
 
@@ -43,7 +43,8 @@ float angleGyro=0;
 float angle=0;
 uint32_t test;
 
-
+volatile int8_t PWML = 0, PWMR = 0;
+volatile int16_t SPEEDL = 0, SPEEDR = 0;
 int main(void)
 {	
 	/* 1. 系统复位以及启动 HSE/PLL 等 */
@@ -56,13 +57,15 @@ int main(void)
 //	OLED_Update();
 	
 	DEBUG_USART_Config();	
-//	BLT_USART_Config();
+	// BLT_USART_Config();
 	
 	MPU_I2C_Config();
 	MPU6050_Init();
-	
-	
 	Timer_Init();
+	Motor_Init();
+	Encoder_Init();
+
+    
 	if(MPU6050ReadID() == 0)
 	{
 		printf("没有检测到MPU6050传感器\r\n");
@@ -89,58 +92,29 @@ int main(void)
 			
 			gy+=22;//校准陀螺仪零偏
 			angleAcc=-atan2(ax,az)/3.14159*180;
-			angleGyro=angle+gy/32768.0*2000*0.001;
+			angleGyro=angle+gy/32768.0*2000*0.01;
 			angle=FILTER_ALPHA*angleAcc+(1.0f-FILTER_ALPHA)*angleGyro;	
 		}
 		if(swTimers[1].flag)
 		{
 			swTimers[1].flag = 0;
 			printf("\r\nPlot： %f %f %f",angleAcc,angleGyro,angle);
-			
-			// ax=Accel[0]*6.1035e-5f;
-			// ay=Accel[1]*6.1035e-5f;
-			// az=Accel[2]*6.1035e-5f;
-			// gx=Gyro[0]*6.1035e-5f;
-			// gy=Gyro[1]*6.1035e-5f;
-			// gz=Gyro[2]*6.1035e-5f;
-			// temperature=Temp/340+36.53;
-
-			
-			
-			// printf("\r\nPlot： %d %d %d    ",gx,gy,gz);
-//			printf("\r\nPlot： %d    ",ax);
-//			printf("\r\nPlot： %d %d %d    ",gx,gy,gz);
-//			printf("\r\nPlot： %f    ",angleAcc);
-			
-			
-//			printf("陀螺仪： %f %f %f    ",gx,gy,gz);
-
-			// //陀螺仪计算
-			// float yaw_g=yaw+gz*0.005;
-			// float pitch_g=pitch+gx*0.005;
-			// float roll_g=roll-gy*0.005;
-			// //加速度计算
-			// float pitch_a=atan2(ay,az)/3.1415927*180.0f;
-			// float roll_a=atan2(ax,az)/3.1415927*180.0f;
-			// //前两者进行融合
-			// yaw=yaw_g;
-			// pitch = FILTER_ALPHA * pitch_g + (1.0f - FILTER_ALPHA) * pitch_a;
-			// roll  = FILTER_ALPHA * roll_g  + (1.0f - FILTER_ALPHA) * roll_a;
-			
-			// printf("\r\n加速度： %f %f %f    ",ax,ay,az);
-			// printf("陀螺仪： %f %f %f    ",gx,gy,gz);
-			// printf("温度： %f°C",temperature);	
-
-			// OLED_Clear(); 
-			// OLED_Printf(0, 0, OLED_8X16, "Pitch: %.2f", pitch);
-			// OLED_Printf(0, 18, OLED_8X16, "Roll:  %.2f", roll);
-			// OLED_Printf(0, 36, OLED_8X16, "Yaw:   %.2f", yaw);
-			// OLED_ShowString(0, 50, "Update Run!", OLED_6X8);
-			// OLED_Update();
-			// printf("\r\n偏航角： %f",yaw);
-			// printf("俯仰角： %f",pitch);
-			// printf("翻滚角： %f",roll);	
 		}
+		if(swTimers[2].flag)
+		{
+            swTimers[2].flag = 0;
+            Motor_SetPWM(1, PWML);
+            Motor_SetPWM(2, PWMR);
+		}
+		if(swTimers[3].flag)
+		{
+			swTimers[3].flag = 0;
+            SPEEDL = Encoder_Get(1);
+            SPEEDR = Encoder_Get(2);
+            // printf("SPEEDL=%d, SPEEDR=%d\r\n", (int)SPEEDL, (int)SPEEDR);
+            // printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
+		}
+
 
 	}
 }

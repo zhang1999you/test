@@ -3,19 +3,20 @@
         {
             "name": "Fly",
             "includePath": [
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\Libraries\\FWlib\\inc",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\Libraries\\CMSIS",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\usart",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\Libraries\\FWlib\\inc",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\Libraries\\CMSIS",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\usart",
                 "D:\\Keil_v5\\ARM\\ARMCC\\include",
                 "D:\\Keil_v5\\ARM\\ARMCC\\include\\rw",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\Libraries\\CMSIS\\startup",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\Libraries\\FWlib\\src",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\mpu6050",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\iic",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\hc05",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\oled",
-                "d:\\desktop\\study\\嘉立创\\stm32F103C8T6\\平衡车\\test\\mpu6050\\User\\timer"
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\Libraries\\CMSIS\\startup",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\Libraries\\FWlib\\src",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\mpu6050",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\iic",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\hc05",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\oled",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\timer",
+                "c:\\Users\\13763\\Desktop\\自学\\嘉立创\\stm32F103C8T6\\test\\mpu6050\\User\\motor"
             ],
             "defines": [
                 "STM32F10X_MD",

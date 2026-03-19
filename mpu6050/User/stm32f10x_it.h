@@ -46,7 +46,7 @@ void PendSV_Handler(void);
 void SysTick_Handler(void);
 
 //任务软件定时器部分
-#define NUM_TIMERS       2       // 需要的定时器数量
+#define NUM_TIMERS       4       // 需要的定时器数量
 /* 任务软件定时器结构 */
 typedef struct {
     uint32_t period_ms;  // 期望周期，单位 ms

@@ -2,6 +2,7 @@
 #include "iic/bsp_hard_i2c.h"
 #include "delay.h"
 #include "usart/bsp_debug_usart.h"
+#include "motor/PWM.h"
 void MPU6050_WriteReg(u8 reg_add,u8 reg_dat)
 {
     I2C_ByteWrite(reg_dat,reg_add);
@@ -16,8 +17,8 @@ void MPU6050_Init(void)
 	Delay(100); 
 	MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x01);
 	MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_2, 0x00);
-	MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV, 0x07);
-	MPU6050_WriteReg(MPU6050_RA_CONFIG, 0x00);
+	MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV, 0x09);
+	MPU6050_WriteReg(MPU6050_RA_CONFIG, 0x06);
 	MPU6050_WriteReg(MPU6050_RA_GYRO_CONFIG, 0x18);
 	MPU6050_WriteReg(MPU6050_RA_ACCEL_CONFIG, 0x18);
 

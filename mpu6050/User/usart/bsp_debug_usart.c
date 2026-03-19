@@ -32,8 +32,8 @@ void DEBUG_USART_Config(void)
     USART_InitTypeDef USART_InitStructure;
     NVIC_InitTypeDef  NVIC_InitStructure;
 
-    /* 1. ?? USART ???? */
-    RCC_APB2PeriphClockCmd(DEBUG_USART_CLK, ENABLE);
+    /* 1. Enable USART clock (USART3 is on APB1) */
+    RCC_APB1PeriphClockCmd(DEBUG_USART_CLK, ENABLE);
 
     /* 2. ???? GPIO ????(TX ? RX ????? GPIOA,???????) */
     RCC_APB2PeriphClockCmd(DEBUG_USART_TX_GPIO_CLK | DEBUG_USART_RX_GPIO_CLK, ENABLE);
@@ -68,7 +68,7 @@ void DEBUG_USART_Config(void)
 
     /* 7. ?? USART ????(RXNE)?????(IDLE) */
     USART_ITConfig(DEBUG_USART, USART_IT_RXNE, ENABLE);
-	USART_ITConfig(DEBUG_USART, USART_IT_IDLE, ENABLE);
+	// USART_ITConfig(DEBUG_USART, USART_IT_IDLE, ENABLE);
     /* 8. ???? USART ?? */
     USART_Cmd(DEBUG_USART, ENABLE);
 }
@@ -139,16 +139,16 @@ void Usart_SendHalfWord( USART_TypeDef * pUSARTx, uint16_t ch)
 	while (USART_GetFlagStatus(pUSARTx, USART_FLAG_TXE) == RESET);	
 }
 
-///重定向c库函数printf到串口，重定向后可使用printf函数
 int fputc(int ch, FILE *f)
 {
-		/* 发送一个字节数据到串口 */
-		USART_SendData(DEBUG_USART, (uint8_t) ch);
-		
-		/* 等待发送完毕 */
-		while (USART_GetFlagStatus(DEBUG_USART, USART_FLAG_TXE) == RESET);		
-	
-		return (ch);
+	/* 【关键修改点】使用 TXE (发送寄存器空) 而不是 TC (发送完成) */
+	/* 检查 TXE 标志位 */
+	while (USART_GetFlagStatus(DEBUG_USART, USART_FLAG_TXE) == RESET);
+
+	/* 发送数据 */
+	USART_SendData(DEBUG_USART, (uint8_t)ch);
+
+	return ch;
 }
 
 ///重定向c库函数scanf到串口，重写向后可使用scanf、getchar等函数

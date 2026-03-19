@@ -31,8 +31,10 @@
 
 /* 定义两个定时器：一个 5ms、一个 50ms */
 volatile SwTimer_t swTimers[NUM_TIMERS] = {
-    { 5, 0, 0 },   //5ms 定时器
+    { 20, 0, 0 },   //50ms 定时器
 		{ 20, 0, 0 }, //打印速度
+    { 20, 0, 0 },   //50ms 定时器
+    { 200, 0, 0 },   //50ms 定时器
 };
 
 
@@ -169,6 +171,40 @@ void TIM1_UP_IRQHandler(void)
 		TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
 	}
 }
+
+/**
+  * @brief  USART1 中断服务函数 (处理 DEBUG_USART 数据)
+  */
+ extern volatile int8_t PWML, PWMR;
+void USART3_IRQHandler(void)
+{
+    if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
+    {
+        uint8_t res = USART_ReceiveData(USART3);
+        if (res == 'W') {        // 比如收到 'W'，左右动力都增加
+            PWML+=10;
+            PWMR+=10;
+        } 
+        else if (res == 'S') {   // 比如收到 'S'，左右动力都减少
+            PWML-=10;
+            PWMR-=10;
+        }
+        else if (res == 'A') {   // 比如收到 'A'，左减右加（左转）
+            PWML-=10;
+            PWMR+=10;
+        }
+        else if (res == 'D') {   // 比如收到 'D'，左加右减（右转）
+            PWML+=10;
+            PWMR-=10;
+        }
+        // ----------------------------------------------------
+
+        // 清除中断标志位 (读取 USART_DR 寄存器后通常会自动清除，手动清除更保险)
+        USART_ClearITPendingBit(USART3, USART_IT_RXNE);
+    }
+}
+
+
 /******************************************************************************/
 /*                 STM32F10x Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */

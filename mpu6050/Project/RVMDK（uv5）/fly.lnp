@@ -37,6 +37,9 @@
 ".\oled_data.o"
 ".\timer.o"
 ".\bsp_usart_blt.o"
+".\motor.o"
+".\pwm.o"
+".\encoder.o"
 --library_type=microlib --strict --scatter ".\fly.sct"
 --summary_stderr --info summarysizes --map --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
