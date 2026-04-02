@@ -32,7 +32,7 @@ class SerialReader(QThread):
                     line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                     if "Plot" in line:
                         # 提取数字
-                        nums = re.findall(r"[-+]?\d*\.\d+|\d+", line)
+                        nums = re.findall(r"[-+]?\d*\.?\d+", line)
                         if nums:
                             self.data_received.emit([float(x) for x in nums])
                 except:

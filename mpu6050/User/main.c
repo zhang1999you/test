@@ -16,7 +16,7 @@
 #include "usart/bsp_debug_usart.h"
 #include "motor/Motor.h"
 #include "motor/Encoder.h"
-
+#include "pid/PID.h"
 
 
 
@@ -44,7 +44,25 @@ float angle=0;
 uint32_t test;
 
 volatile int8_t PWML = 0, PWMR = 0;
+volatile int8_t PWMAve = 0, PWMDif = 0;
+
 volatile int16_t SPEEDL = 0, SPEEDR = 0;
+PID_t AnglePID={
+    .Target = 3.8,
+    .Actual = 0,
+    .Out = 0,
+    
+    .Kp = 4,
+    .Ki = 0.2,
+    .Kd = 3,
+    
+    .Error0 = 0,
+    .Error1 = 0,
+    .ErrorInt = 0,
+    
+    .OutMax = 50,
+    .OutMin = -50
+};
 int main(void)
 {	
 	/* 1. 系统复位以及启动 HSE/PLL 等 */
@@ -90,9 +108,9 @@ int main(void)
 			gy=Gyro[1];
 			gz=Gyro[2];
 			
-			gy+=22;//校准陀螺仪零偏
-			angleAcc=-atan2(ax,az)/3.14159*180;
-			angleGyro=angle+gy/32768.0*2000*0.01;
+			gx+=116;//校准陀螺仪零偏
+			angleAcc=atan2(ay,az)/3.14159*180;
+			angleGyro=angle+gx/32768.0*2000*0.01;
 			angle=FILTER_ALPHA*angleAcc+(1.0f-FILTER_ALPHA)*angleGyro;	
 		}
 		if(swTimers[1].flag)
@@ -100,19 +118,49 @@ int main(void)
 			swTimers[1].flag = 0;
 			printf("\r\nPlot： %f %f %f",angleAcc,angleGyro,angle);
 		}
-		if(swTimers[2].flag)
+		if(swTimers[2].flag)//速度环 角度环
 		{
             swTimers[2].flag = 0;
-            Motor_SetPWM(1, PWML);
-            Motor_SetPWM(2, PWMR);
+            if(angle>50 || angle<-50) 
+            {
+                PWML = -100;
+                PWMR = -100;
+            }
+            else
+            {
+                AnglePID.Actual = angle;
+                PID_Update(&AnglePID);
+                PWMAve = (int8_t)AnglePID.Out;
+                PWML=(PWMAve+PWMDif)/2;
+                PWMR=(PWMAve-PWMDif)/2;
+
+                if (PWML > 0) {
+                    PWML += 50;
+                } else if (PWML < 0) {
+                    PWML -= 50;
+                }
+                if (PWMR > 0) {
+                    PWMR += 50;
+                } else if (PWMR < 0) {
+                    PWMR -= 50;
+                }
+                if(PWML > 100) PWML = 100;
+                if(PWML < -100) PWML = -100;
+                if(PWMR > 100) PWMR = 100;
+                if(PWMR < -100) PWMR = -100;
+
+                Motor_SetPWM(1, PWML);
+                Motor_SetPWM(2, PWMR);
+            }
+
 		}
-		if(swTimers[3].flag)
+		if(swTimers[3].flag)//转向环
 		{
 			swTimers[3].flag = 0;
             SPEEDL = Encoder_Get(1);
             SPEEDR = Encoder_Get(2);
             // printf("SPEEDL=%d, SPEEDR=%d\r\n", (int)SPEEDL, (int)SPEEDR);
-            // printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
+            printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
 		}
 
 

@@ -40,6 +40,7 @@
 ".\motor.o"
 ".\pwm.o"
 ".\encoder.o"
+".\pid.o"
 --library_type=microlib --strict --scatter ".\fly.sct"
 --summary_stderr --info summarysizes --map --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

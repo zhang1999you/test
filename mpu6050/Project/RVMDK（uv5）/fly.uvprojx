@@ -637,6 +637,16 @@
               <FileType>1</FileType>
               <FilePath>..\..\User\motor\Encoder.c</FilePath>
             </File>
+            <File>
+              <FileName>PID.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\pid\PID.c</FilePath>
+            </File>
+            <File>
+              <FileName>PID.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\pid\PID.h</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
