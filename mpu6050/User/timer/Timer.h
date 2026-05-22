@@ -2,5 +2,5 @@
 #define __TIMER_H
 
 void Timer_Init(void);
-
+void TIM1_Control_Init(void);
 #endif

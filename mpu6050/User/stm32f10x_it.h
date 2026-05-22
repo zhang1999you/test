@@ -54,7 +54,11 @@ typedef struct {
     uint8_t  flag;       // 到期标志
 } SwTimer_t;
 extern volatile SwTimer_t swTimers[NUM_TIMERS];
-	 
+
+extern char RxBuffer[64];
+extern uint8_t RxCounter;
+extern uint8_t RxFlag;
+extern void Interrupt_Priority_Config(void);
 #ifdef __cplusplus
 }
 #endif

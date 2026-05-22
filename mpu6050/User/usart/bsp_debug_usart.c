@@ -33,7 +33,7 @@ void DEBUG_USART_Config(void)
     NVIC_InitTypeDef  NVIC_InitStructure;
 
     /* 1. Enable USART clock (USART3 is on APB1) */
-    RCC_APB1PeriphClockCmd(DEBUG_USART_CLK, ENABLE);
+    RCC_APB2PeriphClockCmd(DEBUG_USART_CLK, ENABLE);
 
     /* 2. ???? GPIO ????(TX ? RX ????? GPIOA,???????) */
     RCC_APB2PeriphClockCmd(DEBUG_USART_TX_GPIO_CLK | DEBUG_USART_RX_GPIO_CLK, ENABLE);

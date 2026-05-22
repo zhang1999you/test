@@ -22,3 +22,13 @@ void PID_Update(PID_t *p)
 	if (p->Out > p->OutMax) {p->Out = p->OutMax;}
 	if (p->Out < p->OutMin) {p->Out = p->OutMin;}
 }
+void PID_Init(PID_t *p)
+{
+	p->Target = 0;
+	p->Actual = 0;
+	p->Out = 0;
+	p->Error0 = 0;
+	p->Error1 = 0;
+	p->ErrorInt = 0;
+}
+
