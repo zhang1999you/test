@@ -140,7 +140,7 @@ void Parse_PID_Commands(void)
         
         else if ((p_cmd = strstr(RxBuffer, "runFlag:")) != NULL)       { if(sscanf(p_cmd, "runFlag:%d", &temp_int) == 1)     {runFlag = (temp_int != 0); match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "accOff:")) != NULL) { if(sscanf(p_cmd, "accOff:%f", &temp_val) == 1) {angleAccOffset = temp_val; printf("angleAccOffset=%.2f\r\n", angleAccOffset); match_success = true;} }
-        
+        else if ((p_cmd = strstr(RxBuffer, "angleGyroReset:")) != NULL) { if(sscanf(p_cmd, "angleGyroReset:%f", &temp_val) == 1) {angleGyro = 0; printf("angleGyroReset=%.2f\r\n", angleGyro); match_success = true;} }
         // 如果连 strstr 都找不到任何关键字，才说明这包数据彻底废了
         if (!match_success) {
             printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);

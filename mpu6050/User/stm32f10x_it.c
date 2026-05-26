@@ -230,9 +230,9 @@ void TIM1_UP_IRQHandler(void)
 
         // 1. 姿态解算
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
-        ax = Accel[0]; az = Accel[2]; gy = Gyro[1]; gy -= 220; 
+        ax = Accel[0]; az = Accel[2]; gy = Gyro[1]; gy -= 28; 
         angleAcc = -atan2(ax, az) / 3.14159f * 180.0f + angleAccOffset; 
-        angleGyro = angle + (gy / 131.0f) * 0.01f; 
+        angleGyro = angle + gy / 32768.0f*2000 * 0.01f; 
         angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
 
         // 2. 直立环 PID 计算与物理输出

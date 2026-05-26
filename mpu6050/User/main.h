@@ -4,7 +4,7 @@
 #include "pid/PID.h"
 
 void SystemClock_Config(void);
-#define FILTER_ALPHA  0.08f  // 降低这个值，收敛变快；升高这个值，抗震动变强
+#define FILTER_ALPHA  0.01f  // 降低这个值，收敛变快；升高这个值，抗震动变强
 
 extern short Accel[3];
 extern short Gyro[3];
