@@ -120,6 +120,7 @@ PID_t SpeedPID={
 
 //     }
 // }
+
 void Parse_PID_Commands(void)
 {
     if (RxFlag == 1)
@@ -130,20 +131,30 @@ void Parse_PID_Commands(void)
         char *p_cmd = NULL; // 用于指向真正有效命令起始位置的指针
 
         // ? 核心改动：不再死板地从头匹配，而是在整个缓冲区里“搜寻”关键字（解决黏连问题）
-        if ((p_cmd = strstr(RxBuffer, "SpeedPID.kp:")) != NULL)      { if(sscanf(p_cmd, "SpeedPID.kp:%f", &temp_val) == 1) {SpeedPID.Kp = temp_val; printf("SpeedPID.Kp=%.2f\r\n", SpeedPID.Kp); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "SpeedPID.ki:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; printf("SpeedPID.Ki=%.2f\r\n", SpeedPID.Ki); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "SpeedPID.kd:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.kd:%f", &temp_val) == 1) {SpeedPID.Kd = temp_val; printf("SpeedPID.Kd=%.2f\r\n", SpeedPID.Kd); match_success = true;} }
+        if ((p_cmd = strstr(RxBuffer, "SpeedPID.kp:")) != NULL)      { if(sscanf(p_cmd, "SpeedPID.kp:%f", &temp_val) == 1) {SpeedPID.Kp = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "SpeedPID.ki:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "SpeedPID.kd:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.kd:%f", &temp_val) == 1) {SpeedPID.Kd = temp_val; match_success = true;} }
         
-        else if ((p_cmd = strstr(RxBuffer, "AnglePID.kp:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kp:%f", &temp_val) == 1) {AnglePID.Kp = temp_val; printf("AnglePID.Kp=%.2f\r\n", AnglePID.Kp); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "AnglePID.ki:")) != NULL) { if(sscanf(p_cmd, "AnglePID.ki:%f", &temp_val) == 1) {AnglePID.Ki = temp_val; printf("AnglePID.Ki=%.2f\r\n", AnglePID.Ki); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "AnglePID.kd:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kd:%f", &temp_val) == 1) {AnglePID.Kd = temp_val; printf("AnglePID.Kd=%.2f\r\n", AnglePID.Kd); match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "AnglePID.kp:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kp:%f", &temp_val) == 1) {AnglePID.Kp = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "AnglePID.ki:")) != NULL) { if(sscanf(p_cmd, "AnglePID.ki:%f", &temp_val) == 1) {AnglePID.Ki = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "AnglePID.kd:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kd:%f", &temp_val) == 1) {AnglePID.Kd = temp_val; match_success = true;} }
         
         else if ((p_cmd = strstr(RxBuffer, "runFlag:")) != NULL)       { if(sscanf(p_cmd, "runFlag:%d", &temp_int) == 1)     {runFlag = (temp_int != 0); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "accOff:")) != NULL) { if(sscanf(p_cmd, "accOff:%f", &temp_val) == 1) {angleAccOffset = temp_val; printf("angleAccOffset=%.2f\r\n", angleAccOffset); match_success = true;} }
-        else if ((p_cmd = strstr(RxBuffer, "angleGyroReset:")) != NULL) { if(sscanf(p_cmd, "angleGyroReset:%f", &temp_val) == 1) {angleGyro = 0; printf("angleGyroReset=%.2f\r\n", angleGyro); match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "accOff:")) != NULL) { if(sscanf(p_cmd, "accOff:%f", &temp_val) == 1) {angleAccOffset = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "angleGyroReset:")) != NULL) { if(sscanf(p_cmd, "angleGyroReset:%f", &temp_val) == 1) {angleGyro = 0;  match_success = true;} }
+        
+        else if ((p_cmd = strstr(RxBuffer, "s:")) != NULL) { 
+            
+            if (sscanf(p_cmd, "s:%f,t:%d", &temp_val, &temp_int) == 2) {
+
+                SpeedPID.Target=temp_val/20.0f;
+                PWMDif=temp_int/2;
+                match_success = true;
+            } 
+        }
         // 如果连 strstr 都找不到任何关键字，才说明这包数据彻底废了
         if (!match_success) {
-            printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);
+            // printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);
         }
 
         // ? 每次处理完后，不管成功还是失败，把接收缓冲区彻底清零，并复位计数器
@@ -151,9 +162,9 @@ void Parse_PID_Commands(void)
         RxCounter = 0;
         RxFlag = 0;
         
-        if(match_success) {
-            printf("ACK: Parameter Updated\r\n"); 
-        }
+        // if(match_success) {
+        //     printf("ACK: Parameter Updated\r\n"); 
+        // }
     }
 }
 void Debug_GPIO_Init(void)
@@ -206,63 +217,24 @@ int main(void)
 	while (1)
 	{
         runFlagLast=runFlag;
-        Parse_PID_Commands();
-		if(swTimers[1].flag)//打印 
+        // Parse_PID_Commands();
+		if(swTimers[1].flag)//打印 当前状态
 		{
 			swTimers[1].flag = 0;
             
             // printf("\r\nAnglePID.Kp=%.2f, Ki=%.2f, Kd=%.2f | SpeedPID.Kp=%.2f, Ki=%.2f, Kd=%.2f\r\n", 
             //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
             //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-            // printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
+            printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
             // printf(angleAccOffset == 0 ? "Angle Acc Offset: %d (Default)\r\n" : "Angle Acc Offset: %d\r\n", angleAccOffset);
             // printf("6");
 			printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
+            // printf("Angle.Kp=%.2f Angle.Ki=%.2f Angle.Kd=%.2f\r\n", AnglePID.Kp, AnglePID.Ki, AnglePID.Kd);
+            // printf("Speed.Kp=%.2f Speed.Ki=%.2f Speed.Kd=%.2f\r\n", SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
+
 			// printf("Plot: %f %f \r\n",angleAcc,angleGyro);
             // printf("Plot: %d %d %d \r\n", (int)gx, (int)gy, (int)gz);
             // printf("Plot: %d %d %d \r\n", (int)ax, (int)ay, (int)az);
-		}
-		if(0)// 角度环
-		{
-            swTimers[2].flag = 0;
-            if(!runFlag)
-            {
-                PID_Init(&AnglePID);
-                Motor_SetPWM(1, 0);
-                Motor_SetPWM(2, 0);
-                continue;
-            }
-            // if(angle>50 || angle<-50) 
-            // {
-            //     runFlag=false;
-            // }
-            else
-            {
-                AnglePID.Actual = angle;
-                PID_Update(&AnglePID);
-                PWMAve = (int8_t)AnglePID.Out;
-                PWML=PWMAve+PWMDif/2;
-                PWMR=PWMAve-PWMDif/2;
-
-                if (PWML > 0) {
-                    PWML += 50;
-                } else if (PWML < 0) {
-                    PWML -= 50;
-                }
-                if (PWMR > 0) {
-                    PWMR += 50;
-                } else if (PWMR < 0) {
-                    PWMR -= 50;
-                }
-                if(PWML > 100) PWML = 100;
-                if(PWML < -100) PWML = -100;
-                if(PWMR > 100) PWMR = 100;
-                if(PWMR < -100) PWMR = -100;
-
-                Motor_SetPWM(1, PWML);
-                Motor_SetPWM(2, PWMR);
-            }
-
 		}
 		if(0)//速度环 转向环
 		{
@@ -274,6 +246,8 @@ int main(void)
                 Motor_SetPWM(2, 0);
                 continue;
             }
+            SPEEDL=Encoder_Get(1);
+            SPEEDR=Encoder_Get(2);
             SPEEDAve = (SPEEDL + SPEEDR) / 2;
             SPEEDDif = SPEEDL - SPEEDR;
             SpeedPID.Actual = SPEEDAve;

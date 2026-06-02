@@ -222,23 +222,23 @@ void SysTick_Handler(void)
 
 void TIM1_UP_IRQHandler(void)
 {
+    static uint8_t global_tick = 0; // 统一的低频任务节拍器
     if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET)
     {
         TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
         
-        GPIO_SetBits(GPIOB, GPIO_Pin_0);
+        // GPIO_SetBits(GPIOB, GPIO_Pin_0); //调试用，查看中断频率
 
-        // 1. 姿态解算
+        // 1. 姿态解算  10ms 更新一次
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
         ax = Accel[0]; az = Accel[2]; gy = Gyro[1]; gy -= 28; 
         angleAcc = -atan2(ax, az) / 3.14159f * 180.0f + angleAccOffset; 
         angleGyro = angle + gy / 32768.0f*2000 * 0.01f; 
         angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
-
-        // 2. 直立环 PID 计算与物理输出
+        // 2. 速度环
         if (runFlag)
         {
-            AnglePID.Actual = angle;
+            AnglePID.Actual = -angle;
             PID_Update(&AnglePID); 
             
             PWMAve = (int8_t)AnglePID.Out;
@@ -270,7 +270,33 @@ void TIM1_UP_IRQHandler(void)
             Motor_SetPWM(2, 0);
             PID_Init(&AnglePID);
         }
-        GPIO_ResetBits(GPIOB, GPIO_Pin_0);
+        // GPIO_ResetBits(GPIOB, GPIO_Pin_0);//调试用，查看中断频率
+
+        global_tick++;//假设主循环周期为 200ms，即 20 个 tick
+        if (global_tick >= 20) 
+        {
+            global_tick = 0;
+        }
+        // 当 tick 为 0 和 10 时执行蓝牙解析（每 100ms 一次，在第 0ms, 100ms 执行）
+        if (global_tick == 0 || global_tick == 10)
+        {
+            Parse_PID_Commands();
+        }
+
+        
+        // 2. 速度环  （每 200ms 一次，在第 50ms 执行）
+        if (global_tick == 5)
+        {
+          SPEEDL=(-Encoder_Get(1))/ 44.0 / 0.2 / 9.27666;
+          SPEEDR=(Encoder_Get(2))/ 44.0 / 0.2 / 9.27666;
+          SPEEDAve = (SPEEDL + SPEEDR) / 2;
+          SPEEDDif = SPEEDL - SPEEDR;
+          SpeedPID.Actual = SPEEDAve;
+          PID_Update(&SpeedPID);
+          AnglePID.Target = SpeedPID.Out;
+        }
+
+
     }
 }
 
