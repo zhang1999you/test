@@ -64,8 +64,8 @@ PID_t AnglePID={
     .Error1 = 0,
     .ErrorInt = 0,
     
-    .OutMax = 50,
-    .OutMin = -50
+    .OutMax = 80,
+    .OutMin = -60
 };
 
 
@@ -147,8 +147,8 @@ void Parse_PID_Commands(void)
             
             if (sscanf(p_cmd, "s:%f,t:%d", &temp_val, &temp_int) == 2) {
 
-                SpeedPID.Target=temp_val/20.0f;
-                PWMDif=temp_int/2;
+                SpeedPID.Target=temp_val/30.0f;
+                PWMDif=temp_int/4;
                 match_success = true;
             } 
         }
@@ -226,54 +226,55 @@ int main(void)
             //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
             //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
             printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
+            printf("Actual = %.2f, Target = %.2f, Out = %.2f\r\n", SpeedPID.Actual, SpeedPID.Target, SpeedPID.Out);
             // printf(angleAccOffset == 0 ? "Angle Acc Offset: %d (Default)\r\n" : "Angle Acc Offset: %d\r\n", angleAccOffset);
             // printf("6");
 			printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
             // printf("Angle.Kp=%.2f Angle.Ki=%.2f Angle.Kd=%.2f\r\n", AnglePID.Kp, AnglePID.Ki, AnglePID.Kd);
             // printf("Speed.Kp=%.2f Speed.Ki=%.2f Speed.Kd=%.2f\r\n", SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-
-			// printf("Plot: %f %f \r\n",angleAcc,angleGyro);
+            
+			// printf("Plot: %d %d \r\n",PWML,PWMR);
             // printf("Plot: %d %d %d \r\n", (int)gx, (int)gy, (int)gz);
             // printf("Plot: %d %d %d \r\n", (int)ax, (int)ay, (int)az);
 		}
-		if(0)//速度环 转向环
-		{
-            swTimers[3].flag = 0;
-            if(!runFlag)
-            {
-                PID_Init(&SpeedPID);
-                Motor_SetPWM(1, 0);
-                Motor_SetPWM(2, 0);
-                continue;
-            }
-            SPEEDL=Encoder_Get(1);
-            SPEEDR=Encoder_Get(2);
-            SPEEDAve = (SPEEDL + SPEEDR) / 2;
-            SPEEDDif = SPEEDL - SPEEDR;
-            SpeedPID.Actual = SPEEDAve;
-            PID_Update(&SpeedPID);
-            AnglePID.Target = SpeedPID.Out;
+		// if(0)//速度环 转向环
+		// {
+        //     swTimers[3].flag = 0;
+        //     if(!runFlag)
+        //     {
+        //         PID_Init(&SpeedPID);
+        //         Motor_SetPWM(1, 0);
+        //         Motor_SetPWM(2, 0);
+        //         continue;
+        //     }
+        //     SPEEDL=Encoder_Get(1);
+        //     SPEEDR=Encoder_Get(2);
+        //     SPEEDAve = (SPEEDL + SPEEDR) / 2;
+        //     SPEEDDif = SPEEDL - SPEEDR;
+        //     SpeedPID.Actual = SPEEDAve;
+        //     PID_Update(&SpeedPID);
+        //     AnglePID.Target = SpeedPID.Out;
 
-            // printf("SPEEDL=%d, SPEEDR=%d\r\n", (int)SPEEDL, (int)SPEEDR);
-            // printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
-		}
+        //     // printf("SPEEDL=%d, SPEEDR=%d\r\n", (int)SPEEDL, (int)SPEEDR);
+        //     // printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
+		// }
+
+
+
         if(runFlag && !runFlagLast)//突然站立的过程
         {
             PID_Init(&AnglePID);
             printf("goRunning\r\n"); 
-            if(angle>50)
+            if(angle>20)
             {
-                Motor_SetPWM(1, 100);
-                Motor_SetPWM(2, 100);
+                Motor_SetPWM(1, -60);
+                Motor_SetPWM(2, -60);
             }
             else
             {
-                Motor_SetPWM(1, -100);
-                Motor_SetPWM(2, -100);
+                Motor_SetPWM(1, 80);
+                Motor_SetPWM(2, 80);
             }
-            // Delay(2000);
-            // Motor_SetPWM(1, 0);
-            // Motor_SetPWM(2, 0);
         }
 
 	}

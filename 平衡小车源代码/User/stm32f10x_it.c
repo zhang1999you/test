@@ -231,7 +231,7 @@ void TIM1_UP_IRQHandler(void)
 
         // 1. 姿态解算  10ms 更新一次
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
-        ax = Accel[0]; az = Accel[2]; gy = Gyro[1]; gy -= 28; 
+        ax = Accel[0]-280; az = Accel[2]; gy = Gyro[1]-15;
         angleAcc = -atan2(ax, az) / 3.14159f * 180.0f + angleAccOffset; 
         angleGyro = angle + gy / 32768.0f*2000 * 0.01f; 
         angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
@@ -245,21 +245,24 @@ void TIM1_UP_IRQHandler(void)
             // PWMDif 是由 SysTick 速度环计算并在后台更新的
             PWML = PWMAve + PWMDif/2; 
             PWMR = PWMAve - PWMDif/2;
-            
-            if (PWML > 0) {
-                PWML += 50;
-            } else if (PWML < 0) {
-                PWML -= 50;
-            }
-            if (PWMR > 0) {
-                PWMR += 50;
-            } else if (PWMR < 0) {
-                PWMR -= 50;
-            }
-            if(PWML > 100) PWML = 100;
-            if(PWML < -100) PWML = -100;
-            if(PWMR > 100) PWMR = 100;
-            if(PWMR < -100) PWMR = -100;
+            if (PWML > 0) PWML = PWML * 13 / 10;
+            if (PWMR > 0) PWMR = PWMR * 13 / 10;
+            // if (PWML > 0) {
+            //     PWML += 10;
+            // } 
+            // if (PWMR > 0) {
+            //     PWMR += 10;
+            // } 
+
+            // if (PWMR > 0) {
+            //     PWMR += 50;
+            // } else if (PWMR < 0) {
+            //     PWMR -= 50;
+            // }
+            if(PWML > 80) PWML = 80;
+            if(PWML < -80) PWML = -80;
+            if(PWMR > 80) PWMR = 80;
+            if(PWMR < -80) PWMR = -80;
 
             Motor_SetPWM(1, PWML);
             Motor_SetPWM(2, PWMR);
@@ -291,7 +294,7 @@ void TIM1_UP_IRQHandler(void)
           SPEEDR=(Encoder_Get(2))/ 44.0 / 0.2 / 9.27666;
           SPEEDAve = (SPEEDL + SPEEDR) / 2;
           SPEEDDif = SPEEDL - SPEEDR;
-          SpeedPID.Actual = SPEEDAve;
+          SpeedPID.Actual = -SPEEDAve;
           PID_Update(&SpeedPID);
           AnglePID.Target = SpeedPID.Out;
         }
