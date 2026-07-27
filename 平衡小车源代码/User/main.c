@@ -23,19 +23,19 @@
 
 
 /**
-  * @brief  Ö÷º¯Êı
-  * @param  ÎŞ  
-  * @retval ÎŞ
+  * @brief  ä¸»å‡½æ•°
+  * @param  æ—   
+  * @retval æ— 
   */
 	
-/* MPU6050Êı¾İ */
+/* MPU6050æ•°æ® */
 
 
 
 short Accel[3];
 short Gyro[3];
 short Temp;
-int16_t ax,ay,az;//¼ÓËÙ¶È¼ÆµÄ½á¹û£¬µ¥Î»g
+int16_t ax,ay,az;//åŠ é€Ÿåº¦è®¡çš„ç»“æœï¼Œå•ä½g
 int16_t gx,gy,gz;
 float angleAcc=0;
 float angleGyro=0;
@@ -57,7 +57,7 @@ PID_t AnglePID={
     .Out = 0,
     
     .Kp = 5,
-    .Ki = 0.1,
+    .Ki = 0,
     .Kd = 5,
     
     .Error0 = 0,
@@ -74,8 +74,8 @@ PID_t SpeedPID={
     .Actual = 0,
     .Out = 0,
     
-    .Kp = 0,
-    .Ki = 0,
+    .Kp = 2,
+    .Ki = 0.1,
     .Kd = 0,
     
     
@@ -92,7 +92,7 @@ PID_t SpeedPID={
 //         float temp_val = 0;
 //         int temp_int = 0;
 //         bool match_success = true;
-//         // int16_t temp_i16 = 0; // Èç¹û´úÂëÆäËûµØ·½ÓÃ²»µ½£¬Õâ¸ö±äÁ¿¿ÉÒÔÉ¾µôÁË
+//         // int16_t temp_i16 = 0; // å¦‚æœä»£ç å…¶ä»–åœ°æ–¹ç”¨ä¸åˆ°ï¼Œè¿™ä¸ªå˜é‡å¯ä»¥åˆ æ‰äº†
 
 //         if (sscanf(RxBuffer, "SpeedPID.kp:%f", &temp_val) == 1)      {SpeedPID.Kp = temp_val; printf("SpeedPID.Kp=%.2f\r\n", SpeedPID.Kp);}
 //         else if (sscanf(RxBuffer, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; printf("SpeedPID.Ki=%.2f\r\n", SpeedPID.Ki);}
@@ -104,8 +104,8 @@ PID_t SpeedPID={
         
 //         else if (sscanf(RxBuffer, "runFlag:%d", &temp_int) == 1)       runFlag = (temp_int != 0);
         
-//         /* ====== ĞŞ¸ÄÕâÀï ====== */
-//         // ½« %hd ¸ÄÎª %f£¬½«½ÓÊÕ±äÁ¿¸ÄÎª &temp_val
+//         /* ====== ä¿®æ”¹è¿™é‡Œ ====== */
+//         // å°† %hd æ”¹ä¸º %fï¼Œå°†æ¥æ”¶å˜é‡æ”¹ä¸º &temp_val
 //         else if (sscanf(RxBuffer, "angleAccOffset:%f", &temp_val) == 1)    {angleAccOffset = temp_val; printf("angleAccOffset=%.2f\r\n", angleAccOffset);}
 
 //         // else if (sscanf(RxBuffer, "angleGyroReset:%f", &temp_val) == 1) {angleGyro = 0; printf("\r\nangleGyroReset=%.2f", angleGyro);}
@@ -128,9 +128,9 @@ void Parse_PID_Commands(void)
         float temp_val = 0;
         int temp_int = 0;
         bool match_success = false; 
-        char *p_cmd = NULL; // ÓÃÓÚÖ¸ÏòÕæÕıÓĞĞ§ÃüÁîÆğÊ¼Î»ÖÃµÄÖ¸Õë
+        char *p_cmd = NULL; // ç”¨äºæŒ‡å‘çœŸæ­£æœ‰æ•ˆå‘½ä»¤èµ·å§‹ä½ç½®çš„æŒ‡é’ˆ
 
-        // ? ºËĞÄ¸Ä¶¯£º²»ÔÙËÀ°åµØ´ÓÍ·Æ¥Åä£¬¶øÊÇÔÚÕû¸ö»º³åÇøÀï¡°ËÑÑ°¡±¹Ø¼ü×Ö£¨½â¾öğ¤Á¬ÎÊÌâ£©
+        // ? æ ¸å¿ƒæ”¹åŠ¨ï¼šä¸å†æ­»æ¿åœ°ä»å¤´åŒ¹é…ï¼Œè€Œæ˜¯åœ¨æ•´ä¸ªç¼“å†²åŒºé‡Œâ€œæœå¯»â€å…³é”®å­—ï¼ˆè§£å†³é»è¿é—®é¢˜ï¼‰
         if ((p_cmd = strstr(RxBuffer, "SpeedPID.kp:")) != NULL)      { if(sscanf(p_cmd, "SpeedPID.kp:%f", &temp_val) == 1) {SpeedPID.Kp = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "SpeedPID.ki:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "SpeedPID.kd:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.kd:%f", &temp_val) == 1) {SpeedPID.Kd = temp_val; match_success = true;} }
@@ -152,12 +152,12 @@ void Parse_PID_Commands(void)
                 match_success = true;
             } 
         }
-        // Èç¹ûÁ¬ strstr ¶¼ÕÒ²»µ½ÈÎºÎ¹Ø¼ü×Ö£¬²ÅËµÃ÷Õâ°üÊı¾İ³¹µ×·ÏÁË
+        // å¦‚æœè¿ strstr éƒ½æ‰¾ä¸åˆ°ä»»ä½•å…³é”®å­—ï¼Œæ‰è¯´æ˜è¿™åŒ…æ•°æ®å½»åº•åºŸäº†
         if (!match_success) {
             // printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);
         }
 
-        // ? Ã¿´Î´¦ÀíÍêºó£¬²»¹Ü³É¹¦»¹ÊÇÊ§°Ü£¬°Ñ½ÓÊÕ»º³åÇø³¹µ×ÇåÁã£¬²¢¸´Î»¼ÆÊıÆ÷
+        // ? æ¯æ¬¡å¤„ç†å®Œåï¼Œä¸ç®¡æˆåŠŸè¿˜æ˜¯å¤±è´¥ï¼ŒæŠŠæ¥æ”¶ç¼“å†²åŒºå½»åº•æ¸…é›¶ï¼Œå¹¶å¤ä½è®¡æ•°å™¨
         memset(RxBuffer, 0, sizeof(RxBuffer)); 
         RxCounter = 0;
         RxFlag = 0;
@@ -167,101 +167,186 @@ void Parse_PID_Commands(void)
         // }
     }
 }
+
+void I2C1_BusRecover(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    uint8_t i;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+
+    /*
+     * PB6=SCLã€PB7=SDA
+     * ä¸´æ—¶é…ç½®æˆå¼€æ¼è¾“å‡º
+     */
+    GPIO_InitStructure.GPIO_Pin =
+        GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_OD;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    /* å…ˆé‡Šæ”¾SDAå’ŒSCLï¼Œç”±ä¸Šæ‹‰ç”µé˜»æ‹‰é«˜ */
+    GPIO_SetBits(GPIOB, GPIO_Pin_6 | GPIO_Pin_7);
+    Delay(1);
+
+    /* æœ€å¤šäº§ç”Ÿ9ä¸ªSCLè„‰å†²ï¼Œè®©ä»æœºé€€å‡ºæœªå®Œæˆçš„ä¼ è¾“ */
+    for (i = 0; i < 9; i++)
+    {
+        if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_7) == Bit_SET)
+        {
+            break;
+        }
+
+        GPIO_ResetBits(GPIOB, GPIO_Pin_6);
+        Delay(1);
+
+        GPIO_SetBits(GPIOB, GPIO_Pin_6);
+        Delay(1);
+    }
+
+    /* æ‰‹åŠ¨äº§ç”ŸSTOPï¼šSCLä¸ºé«˜æ—¶ï¼Œè®©SDAä»ä½å˜é«˜ */
+    GPIO_ResetBits(GPIOB, GPIO_Pin_7);
+    Delay(1);
+
+    GPIO_SetBits(GPIOB, GPIO_Pin_6);
+    Delay(1);
+
+    GPIO_SetBits(GPIOB, GPIO_Pin_7);
+    Delay(1);
+}
+
+
+void debugTest1()
+{
+    while(1)
+    {
+        printf("test\r\n");	
+    }
+}
+void debugTest2()
+{
+    while(1)
+    {
+        if(MPU6050ReadID() == 0)
+        {
+            printf("æ²¡æœ‰æ£€æµ‹åˆ°MPU6050ä¼ æ„Ÿå™¨\r\n");	
+        }
+        else
+        {
+            printf("æ£€æµ‹åˆ°MPU6050ä¼ æ„Ÿå™¨\r\n");
+        }
+    }
+}
 void Debug_GPIO_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    // 1. ¿ªÆô GPIOB Ê±ÖÓ
+    // 1. å¼€å¯ GPIOB æ—¶é’Ÿ
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 
-    // 2. ÅäÖÃ PB0 ÎªÍÆÍìÊä³ö (Output Push-Pull)
+    // 2. é…ç½® PB0 ä¸ºæ¨æŒ½è¾“å‡º (Output Push-Pull)
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // ÍÆÍìÊä³ö
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // 50MHz¸ßËÙ
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // æ¨æŒ½è¾“å‡º
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // 50MHzé«˜é€Ÿ
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 
-    // Ä¬ÈÏÀ­µÍ
+    // é»˜è®¤æ‹‰ä½
     GPIO_ResetBits(GPIOB, GPIO_Pin_0);
 }
 
+void Debug_PA9_PA10_Test(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    /* å¼€å¯GPIOAæ—¶é’Ÿ */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    /* PA9ã€PA10é…ç½®ä¸ºæ™®é€šæ¨æŒ½è¾“å‡º */
+    GPIO_InitStructure.GPIO_Pin =
+        GPIO_Pin_9 | GPIO_Pin_10;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    while (1)
+    {
+        /* ç¬¬ä¸€é˜¶æ®µï¼šPA9é«˜ï¼ŒPA10ä½ */
+        GPIO_SetBits(GPIOA, GPIO_Pin_9);
+        GPIO_ResetBits(GPIOA, GPIO_Pin_10);
+        Delay(500);
+
+        /* ç¬¬äºŒé˜¶æ®µï¼šPA9ä½ï¼ŒPA10é«˜ */
+        GPIO_ResetBits(GPIOA, GPIO_Pin_9);
+        GPIO_SetBits(GPIOA, GPIO_Pin_10);
+        Delay(500);
+    }
+}
 int main(void)
 {	
-	/* 1. ÏµÍ³¸´Î»ÒÔ¼°Æô¶¯ HSE/PLL µÈ */
-	SystemInit();                 // CMSIS: ¸´Î»²¢ÅäÖÃÏµÍ³Ê±ÖÓÔ´µ½Ä¬ÈÏ×´Ì¬
-	SystemClock_Config();         // SPL: Äú×Ô¼ºĞ´µÄ 72MHz Ê±ÖÓÅäÖÃº¯Êı
+	/* 1. ç³»ç»Ÿå¤ä½ä»¥åŠå¯åŠ¨ HSE/PLL ç­‰ */
+	SystemInit();                 // CMSIS: å¤ä½å¹¶é…ç½®ç³»ç»Ÿæ—¶é’Ÿæºåˆ°é»˜è®¤çŠ¶æ€
+	SystemClock_Config();         // SPL: æ‚¨è‡ªå·±å†™çš„ 72MHz æ—¶é’Ÿé…ç½®å‡½æ•°
 	SysTick_Config(SystemCoreClock/1000);
-	
-//	OLED_Init(); 
-//	OLED_ShowString(0, 0, "OLED Ready!", OLED_8X16);
-//	OLED_Update();
-	Interrupt_Priority_Config();//ÖĞ¶ÏÓÅÏÈ¼¶ÉèÖÃ
+    DEBUG_USART_Config();
+    // Debug_PA9_PA10_Test();
 
-	DEBUG_USART_Config();	
+	Interrupt_Priority_Config();//ä¸­æ–­ä¼˜å…ˆçº§è®¾ç½®
+    I2C1_BusRecover();
 	MPU_I2C_Config();
 	MPU6050_Init();
+    // while (1)
+    // {
+    //     printf("goRunning\r\n");
+    //     Delay(100);
+    // }
 	Timer_Init();
 	Motor_Init();
 	Encoder_Init();
-    Debug_GPIO_Init();
-    TIM1_Control_Init();//TIM1 ÓÃÓÚ×ËÌ¬½âËãºÍÖ±Á¢»·¿ØÖÆµÄ¶¨Ê±Æ÷£¬10ms ¸üĞÂÒ»´Î
-	// if(MPU6050ReadID() == 0)
-	// {
-	// 	printf("Ã»ÓĞ¼ì²âµ½MPU6050´«¸ĞÆ÷\r\n");
-	// 		while(1);	
-	// }
-	// else
-	// {
-	// 	printf("¼ì²âµ½MPU6050´«¸ĞÆ÷\r\n");
-	// }
+    Debug_GPIO_Init(); 
+    TIM1_Control_Init();//TIM1 ç”¨äºå§¿æ€è§£ç®—å’Œç›´ç«‹ç¯æ§åˆ¶çš„å®šæ—¶å™¨ï¼Œ10ms æ›´æ–°ä¸€æ¬¡
+    // while(1)
+    // {
+    //     printf("goRunning\r\n"); 
+    //     TIM_SetCompare3(TIM4, 50);
+    //     TIM_SetCompare4(TIM4, 50);
+    // }
     bool runFlagLast = false;
 	while (1)
 	{
         runFlagLast=runFlag;
         // Parse_PID_Commands();
-		if(swTimers[1].flag)//´òÓ¡ µ±Ç°×´Ì¬
+		if(swTimers[1].flag)//æ‰“å° å½“å‰çŠ¶æ€
 		{
 			swTimers[1].flag = 0;
-            
-            // printf("\r\nAnglePID.Kp=%.2f, Ki=%.2f, Kd=%.2f | SpeedPID.Kp=%.2f, Ki=%.2f, Kd=%.2f\r\n", 
-            //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
-            //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-            printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
-            printf("Actual = %.2f, Target = %.2f, Out = %.2f\r\n", SpeedPID.Actual, SpeedPID.Target, SpeedPID.Out);
-            // printf(angleAccOffset == 0 ? "Angle Acc Offset: %d (Default)\r\n" : "Angle Acc Offset: %d\r\n", angleAccOffset);
-            // printf("6");
-			printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
-            // printf("Angle.Kp=%.2f Angle.Ki=%.2f Angle.Kd=%.2f\r\n", AnglePID.Kp, AnglePID.Ki, AnglePID.Kd);
-            // printf("Speed.Kp=%.2f Speed.Ki=%.2f Speed.Kd=%.2f\r\n", SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-            
-			// printf("Plot: %d %d \r\n",PWML,PWMR);
-            // printf("Plot: %d %d %d \r\n", (int)gx, (int)gy, (int)gz);
-            // printf("Plot: %d %d %d \r\n", (int)ax, (int)ay, (int)az);
+            bool debugStd=0;
+            if(debugStd)
+            {
+                // printf("\r\nAnglePID.Kp=%.2f, Ki=%.2f, Kd=%.2f | SpeedPID.Kp=%.2f, Ki=%.2f, Kd=%.2f\r\n", 
+                //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
+                //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
+                // printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
+                
+                // printf(angleAccOffset == 0 ? "Angle Acc Offset: %d (Default)\r\n" : "Angle Acc Offset: %d\r\n", angleAccOffset);
+                // printf("6");
+                
+                // printf("Angle.Kp=%.2f Angle.Ki=%.2f Angle.Kd=%.2f\r\n", AnglePID.Kp, AnglePID.Ki, AnglePID.Kd);
+                // printf("Speed.Kp=%.2f Speed.Ki=%.2f Speed.Kd=%.2f\r\n", SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
+                // printf("Plot: %d %d \r\n",PWML,PWMR);
+                
+                
+                printf("gxDebug: %d %d %d \r\n", (int)gx, (int)gy, (int)gz);
+                printf("xDebug: %d %d %d \r\n", (int)ax, (int)ay, (int)az);
+                printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
+            }
+            else
+            {
+                printf("Actual = %.2f, Target = %.2f, Out = %.2f\r\n", SpeedPID.Actual, SpeedPID.Target, SpeedPID.Out);
+                printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
+
+            }
 		}
-		// if(0)//ËÙ¶È»· ×ªÏò»·
-		// {
-        //     swTimers[3].flag = 0;
-        //     if(!runFlag)
-        //     {
-        //         PID_Init(&SpeedPID);
-        //         Motor_SetPWM(1, 0);
-        //         Motor_SetPWM(2, 0);
-        //         continue;
-        //     }
-        //     SPEEDL=Encoder_Get(1);
-        //     SPEEDR=Encoder_Get(2);
-        //     SPEEDAve = (SPEEDL + SPEEDR) / 2;
-        //     SPEEDDif = SPEEDL - SPEEDR;
-        //     SpeedPID.Actual = SPEEDAve;
-        //     PID_Update(&SpeedPID);
-        //     AnglePID.Target = SpeedPID.Out;
-
-        //     // printf("SPEEDL=%d, SPEEDR=%d\r\n", (int)SPEEDL, (int)SPEEDR);
-        //     // printf("PWML=%d, PWMR=%d\r\n", (int)PWML, (int)PWMR);
-		// }
-
-
-
-        if(runFlag && !runFlagLast)//Í»È»Õ¾Á¢µÄ¹ı³Ì
+        
+        if(runFlag && !runFlagLast)//çªç„¶ç«™ç«‹çš„è¿‡ç¨‹
         {
             PID_Init(&AnglePID);
             printf("goRunning\r\n"); 

@@ -7,7 +7,7 @@ from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 import re
 
 # --- 配置参数 ---
-SERIAL_PORT = 'COM3'  # 替换为你的串口号
+SERIAL_PORT = 'COM5'  # 替换为你的串口号
 BAUD_RATE = 115200    # 波特率
 WINDOW_SIZE = 500     # 横轴显示的点数，越多波形越长
 UPDATE_INTERVAL = 16  # 刷新间隔(ms)，16ms 约等于 60fps

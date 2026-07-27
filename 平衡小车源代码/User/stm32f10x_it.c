@@ -231,9 +231,9 @@ void TIM1_UP_IRQHandler(void)
 
         // 1. 姿态解算  10ms 更新一次
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
-        ax = Accel[0]-280; az = Accel[2]; gy = Gyro[1]-15;
-        angleAcc = -atan2(ax, az) / 3.14159f * 180.0f + angleAccOffset; 
-        angleGyro = angle + gy / 32768.0f*2000 * 0.01f; 
+        ay = Accel[1]; az = Accel[2];gx = -(Gyro[0]+60);
+        angleAcc = -atan2(ay, az) / 3.14159f * 180.0f + angleAccOffset; 
+        angleGyro = angle + gx / 32768.0f*2000 * 0.01f; 
         angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
         // 2. 速度环
         if (runFlag)
@@ -265,7 +265,7 @@ void TIM1_UP_IRQHandler(void)
             if(PWMR < -80) PWMR = -80;
 
             Motor_SetPWM(1, PWML);
-            Motor_SetPWM(2, PWMR);
+            Motor_SetPWM(2, -PWMR);
         }
         else
         {
@@ -288,7 +288,7 @@ void TIM1_UP_IRQHandler(void)
 
         
         // 2. 速度环  （每 200ms 一次，在第 50ms 执行）
-        if (global_tick == 5)
+        if (global_tick == 5 || global_tick == 10 || global_tick == 15 || global_tick == 0)
         {
           SPEEDL=(-Encoder_Get(1))/ 44.0 / 0.2 / 9.27666;
           SPEEDR=(Encoder_Get(2))/ 44.0 / 0.2 / 9.27666;
