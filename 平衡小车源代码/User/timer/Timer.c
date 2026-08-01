@@ -38,7 +38,7 @@ void TIM1_Control_Init(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE); 
 
     // 2. 定时器基础配置：72MHz / 7200 = 10kHz (计数器每 0.1ms 加 1)
-    TIM_TimeBaseStructure.TIM_Period = 100 - 1;          // 自动重装载值 100，即 100 * 0.1ms = 10ms
+    TIM_TimeBaseStructure.TIM_Period = 50 - 1;          // 自动重装载值 100，即 100 * 0.1ms = 10ms
     TIM_TimeBaseStructure.TIM_Prescaler = 7200 - 1;      // 预分频器
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // 向上计数

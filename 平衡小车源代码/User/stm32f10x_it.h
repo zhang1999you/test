@@ -59,6 +59,8 @@ extern char RxBuffer[64];
 extern uint8_t RxCounter;
 extern uint8_t RxFlag;
 extern void Interrupt_Priority_Config(void);
+extern float sensorAngleOffset;//安装误差校准
+extern volatile float speedAngleOffset;
 #ifdef __cplusplus
 }
 #endif

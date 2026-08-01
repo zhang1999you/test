@@ -219,7 +219,29 @@ void SysTick_Handler(void)
 	
 }
 
+float sensorAngleOffset = 0.0f;//安装误差校准
 
+int8_t Motor_DeadzoneCompensate(int8_t pwm)//死区补偿
+{
+    const int8_t DEADZONE = 10;
+    const int8_t EPSILON = 2;
+
+    if (pwm > EPSILON)
+    {
+        return pwm + DEADZONE;
+    }
+
+    if (pwm < -EPSILON)
+    {
+        return pwm - DEADZONE;
+    }
+
+    return 0;
+}
+
+const float wheelCircumference=3.1416*7;//轮子周长cm
+volatile float speedAngleOffset = 0.0f;
+static float speedAveFiltered=0.0f;
 void TIM1_UP_IRQHandler(void)
 {
     static uint8_t global_tick = 0; // 统一的低频任务节拍器
@@ -231,34 +253,38 @@ void TIM1_UP_IRQHandler(void)
 
         // 1. 姿态解算  10ms 更新一次
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
-        ay = Accel[1]; az = Accel[2];gx = -(Gyro[0]+60);
-        angleAcc = -atan2(ay, az) / 3.14159f * 180.0f + angleAccOffset; 
-        angleGyro = angle + gx / 32768.0f*2000 * 0.01f; 
+        ay = Accel[1]; az = Accel[2];gx = (Gyro[0]+65);
+        angleAcc = atan2f(ay, az) / 3.14159f * 180.0f + sensorAngleOffset ; 
+        angleGyro = angle + gx / 32768.0f*2000 * 0.005f; 
         angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
-        // 2. 速度环
+        // 2. 角度环
         if (runFlag)
         {
-            AnglePID.Actual = -angle;
-            PID_Update(&AnglePID); 
-            
+            AnglePID.Target = angleAccOffset+speedAngleOffset;
+            AnglePID.Actual = angle;
+            PID_Update(&AnglePID);
+
+            /* 先取得角度环输出 */
             PWMAve = (int8_t)AnglePID.Out;
-            // PWMDif 是由 SysTick 速度环计算并在后台更新的
+
+            /* 再加入电机启动补偿 */
+            if (fabsf(SpeedPID.Target) > 1.0f &&
+                fabsf(SpeedPID.Actual) < DRIVE_START_SPEED_CM_S)
+            {
+                if (AnglePID.Out > 4.0f &&
+                    AnglePID.Out < DRIVE_START_PWM)
+                {
+                    PWMAve = DRIVE_START_PWM;
+                }
+                else if (AnglePID.Out < -4.0f &&
+                        AnglePID.Out > -DRIVE_START_PWM)
+                {
+                    PWMAve = -DRIVE_START_PWM;
+                }
+            }
             PWML = PWMAve + PWMDif/2; 
             PWMR = PWMAve - PWMDif/2;
-            if (PWML > 0) PWML = PWML * 13 / 10;
-            if (PWMR > 0) PWMR = PWMR * 13 / 10;
-            // if (PWML > 0) {
-            //     PWML += 10;
-            // } 
-            // if (PWMR > 0) {
-            //     PWMR += 10;
-            // } 
 
-            // if (PWMR > 0) {
-            //     PWMR += 50;
-            // } else if (PWMR < 0) {
-            //     PWMR -= 50;
-            // }
             if(PWML > 80) PWML = 80;
             if(PWML < -80) PWML = -80;
             if(PWMR > 80) PWMR = 80;
@@ -275,28 +301,130 @@ void TIM1_UP_IRQHandler(void)
         }
         // GPIO_ResetBits(GPIOB, GPIO_Pin_0);//调试用，查看中断频率
 
-        global_tick++;//假设主循环周期为 200ms，即 20 个 tick
+        global_tick++;//
         if (global_tick >= 20) 
         {
             global_tick = 0;
         }
-        // 当 tick 为 0 和 10 时执行蓝牙解析（每 100ms 一次，在第 0ms, 100ms 执行）
-        if (global_tick == 0 || global_tick == 10)
-        {
-            Parse_PID_Commands();
-        }
+        // if (global_tick == 0 || global_tick == 10)
+        // {
+        //     Parse_PID_Commands();
+        // }
 
         
-        // 2. 速度环  （每 200ms 一次，在第 50ms 执行）
+        // 2. 速度环 
         if (global_tick == 5 || global_tick == 10 || global_tick == 15 || global_tick == 0)
         {
-          SPEEDL=(-Encoder_Get(1))/ 44.0 / 0.2 / 9.27666;
-          SPEEDR=(Encoder_Get(2))/ 44.0 / 0.2 / 9.27666;
+          SPEEDL=(-Encoder_Get(1))/ 44.0 / 0.025f / 9.27666* wheelCircumference;//cm/s
+          SPEEDR=(-Encoder_Get(2))/ 44.0 / 0.025f / 9.27666* wheelCircumference;
           SPEEDAve = (SPEEDL + SPEEDR) / 2;
+
+
+          float speedFilterAlpha;
+          if (fabsf(SPEEDAve) > 20.0f)
+          {
+              speedFilterAlpha = 0.6f;   // 大速度时快速跟随
+          }
+          else
+          {
+              speedFilterAlpha = 0.25f;  // 低速时平滑
+          }
+
+          speedAveFiltered += 0.25f *
+                              (SPEEDAve - speedAveFiltered);
+
           SPEEDDif = SPEEDL - SPEEDR;
-          SpeedPID.Actual = -SPEEDAve;
-          PID_Update(&SpeedPID);
-          AnglePID.Target = SpeedPID.Out;
+          if (runFlag)
+          {
+              float targetStep;
+              float targetDelta;
+              bool overspeed;
+              float speedError;
+              float speedFeedForward;
+              /* 避免摇杆一推到底时，目标速度瞬间跳变 */
+              targetStep = SPEED_TARGET_ACCEL_CM_S2 * SPEED_LOOP_DT;
+              targetDelta = speedCommandCmS - SpeedPID.Target;
+
+              if (targetDelta > targetStep)
+                  SpeedPID.Target += targetStep;
+              else if (targetDelta < -targetStep)
+                  SpeedPID.Target -= targetStep;
+              else
+                  SpeedPID.Target = speedCommandCmS;
+
+              SpeedPID.Actual = speedAveFiltered;
+              if (fabsf(SpeedPID.Target) < 0.5f &&fabsf(SpeedPID.Actual) < 2.0f)
+              {
+                  SpeedPID.Actual = 0.0f;
+                  SpeedPID.ErrorInt = 0.0f;
+              }
+
+              /*
+              * 实际速度已经超过目标速度时，开放更大的倾角用于刹车；
+              * 正常行驶时仍限制较小倾角，避免满摇杆摔车。
+              */
+              speedError = SpeedPID.Target - SpeedPID.Actual;
+
+              overspeed =
+                  (SpeedPID.Target > 0.5f &&
+                  SpeedPID.Actual > SpeedPID.Target + 1.5f) ||
+
+                  (SpeedPID.Target < -0.5f &&
+                  SpeedPID.Actual < SpeedPID.Target - 1.5f) ||
+
+                  (fabsf(SpeedPID.Target) <= 0.5f &&
+                  fabsf(SpeedPID.Actual) > 1.5f);
+
+              if (overspeed)
+              {
+                  speedFeedForward = 0.0f;
+              }
+              else
+              {
+                  speedFeedForward =
+                      SPEED_CMD_FF_GAIN * SpeedPID.Target;
+              }
+
+              SpeedPID.OutMin = -SpeedPID.OutMax;
+
+
+
+
+              SpeedPID.OutMax = overspeed ?
+                                SPEED_BRAKE_TILT_MAX_DEG :
+                                SPEED_DRIVE_TILT_MAX_DEG;
+
+              SpeedPID.OutMin = -SpeedPID.OutMax;
+
+              PID_Update(&SpeedPID);
+
+
+              /* 摇杆直行前馈：Target 已经经过加减速斜坡处理 */
+
+
+              if (speedFeedForward > SPEED_CMD_FF_MAX_DEG)
+                  speedFeedForward = SPEED_CMD_FF_MAX_DEG;
+              else if (speedFeedForward < -SPEED_CMD_FF_MAX_DEG)
+                  speedFeedForward = -SPEED_CMD_FF_MAX_DEG;
+
+              /* 前馈负责起步，SpeedPID.Out 负责速度修正/刹车 */
+              speedAngleOffset = speedFeedForward + SpeedPID.Out;
+
+              if (speedAngleOffset > SPEED_TOTAL_TILT_MAX_DEG)
+                  speedAngleOffset = SPEED_TOTAL_TILT_MAX_DEG;
+              else if (speedAngleOffset < -SPEED_TOTAL_TILT_MAX_DEG)
+                  speedAngleOffset = -SPEED_TOTAL_TILT_MAX_DEG;
+                        }
+          else
+          {
+              speedAngleOffset = 0.0f;
+              speedAveFiltered = 0.0f;
+              speedCommandCmS = 0.0f;
+              PID_Init(&SpeedPID);
+              speedCommandCmS = 0.0f;
+              PWMDif = 0;
+          }
+
         }
 
 

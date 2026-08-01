@@ -46,7 +46,7 @@ volatile int8_t PWMAve = 0, PWMDif = 0;
 
 volatile float SPEEDL = 0, SPEEDR = 0;
 volatile float SPEEDAve = 0, SPEEDDif = 0;
-
+volatile float speedCommandCmS = 0.0f;
 bool runFlag = false;
 float angleAccOffset = 0.0f;
 
@@ -56,16 +56,16 @@ PID_t AnglePID={
     .Actual = 0,
     .Out = 0,
     
-    .Kp = 5,
+    .Kp = 8,
     .Ki = 0,
-    .Kd = 5,
+    .Kd = 0.3,
     
     .Error0 = 0,
     .Error1 = 0,
     .ErrorInt = 0,
     
     .OutMax = 80,
-    .OutMin = -60
+    .OutMin = -80
 };
 
 
@@ -74,52 +74,14 @@ PID_t SpeedPID={
     .Actual = 0,
     .Out = 0,
     
-    .Kp = 2,
-    .Ki = 0.1,
+    .Kp = 0.08f,
+    .Ki = 0.001f,
     .Kd = 0,
     
     
-    .OutMax = 20,
-    .OutMin = -20
+    .OutMax =  SPEED_DRIVE_TILT_MAX_DEG,
+    .OutMin = -SPEED_DRIVE_TILT_MAX_DEG,
 };
-            // printf("\r\nAnglePID.Kp=%.2f, Ki=%.2f, Kd=%.2f | SpeedPID.Kp=%.2f, Ki=%.2f, Kd=%.2f\r\n", 
-            //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
-            //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-// void Parse_PID_Commands(void)
-// {
-//     if (RxFlag == 1)
-//     {
-//         float temp_val = 0;
-//         int temp_int = 0;
-//         bool match_success = true;
-//         // int16_t temp_i16 = 0; // 如果代码其他地方用不到，这个变量可以删掉了
-
-//         if (sscanf(RxBuffer, "SpeedPID.kp:%f", &temp_val) == 1)      {SpeedPID.Kp = temp_val; printf("SpeedPID.Kp=%.2f\r\n", SpeedPID.Kp);}
-//         else if (sscanf(RxBuffer, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; printf("SpeedPID.Ki=%.2f\r\n", SpeedPID.Ki);}
-//         else if (sscanf(RxBuffer, "SpeedPID.kd:%f", &temp_val) == 1) {SpeedPID.Kd = temp_val; printf("SpeedPID.Kd=%.2f\r\n", SpeedPID.Kd);}
-        
-//         else if (sscanf(RxBuffer, "AnglePID.kp:%f", &temp_val) == 1) {AnglePID.Kp = temp_val; printf("AnglePID.Kp=%.2f\r\n", AnglePID.Kp);}
-//         else if (sscanf(RxBuffer, "AnglePID.ki:%f", &temp_val) == 1) {AnglePID.Ki = temp_val; printf("AnglePID.Ki=%.2f\r\n", AnglePID.Ki);}
-//         else if (sscanf(RxBuffer, "AnglePID.kd:%f", &temp_val) == 1) {AnglePID.Kd = temp_val; printf("AnglePID.Kd=%.2f\r\n", AnglePID.Kd);}
-        
-//         else if (sscanf(RxBuffer, "runFlag:%d", &temp_int) == 1)       runFlag = (temp_int != 0);
-        
-//         /* ====== 修改这里 ====== */
-//         // 将 %hd 改为 %f，将接收变量改为 &temp_val
-//         else if (sscanf(RxBuffer, "angleAccOffset:%f", &temp_val) == 1)    {angleAccOffset = temp_val; printf("angleAccOffset=%.2f\r\n", angleAccOffset);}
-
-//         // else if (sscanf(RxBuffer, "angleGyroReset:%f", &temp_val) == 1) {angleGyro = 0; printf("\r\nangleGyroReset=%.2f", angleGyro);}
-//         else {
-//             match_success = false;
-//             printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);
-//         }
-//         RxCounter = 0;
-//         RxFlag = 0;
-        
-//         if(match_success) printf("ACK: Parameter Updated\r\n"); 
-
-//     }
-// }
 
 void Parse_PID_Commands(void)
 {
@@ -147,8 +109,13 @@ void Parse_PID_Commands(void)
             
             if (sscanf(p_cmd, "s:%f,t:%d", &temp_val, &temp_int) == 2) {
 
-                SpeedPID.Target=temp_val/30.0f;
-                PWMDif=temp_int/4;
+                if (temp_val > BLE_SPEED_FULL_SCALE)
+                    temp_val = BLE_SPEED_FULL_SCALE;
+                else if (temp_val < -BLE_SPEED_FULL_SCALE)
+                    temp_val = -BLE_SPEED_FULL_SCALE;
+                //小程序摇杆最大值是 100，实际速度目标最大只有 15 cm/s
+                speedCommandCmS = temp_val * MAX_COMMAND_SPEED_CM_S / BLE_SPEED_FULL_SCALE;
+                PWMDif=0;
                 match_success = true;
             } 
         }
@@ -214,7 +181,17 @@ void I2C1_BusRecover(void)
     GPIO_SetBits(GPIOB, GPIO_Pin_7);
     Delay(1);
 }
+void GitCUrrentAngle()
+{
+    MPU6050ReadAcc(Accel);
 
+    angleAcc = atan2f((float)Accel[1], (float)Accel[2])
+            * 180.0f / 3.1415926f
+            + sensorAngleOffset;
+
+    angle = angleAcc;
+    angleGyro = angleAcc;
+}
 
 void debugTest1()
 {
@@ -299,10 +276,11 @@ int main(void)
     //     printf("goRunning\r\n");
     //     Delay(100);
     // }
-	Timer_Init();
+	// Timer_Init();
 	Motor_Init();
 	Encoder_Init();
     Debug_GPIO_Init(); 
+    GitCUrrentAngle();
     TIM1_Control_Init();//TIM1 用于姿态解算和直立环控制的定时器，10ms 更新一次
     // while(1)
     // {
@@ -311,33 +289,59 @@ int main(void)
     //     TIM_SetCompare4(TIM4, 50);
     // }
     bool runFlagLast = false;
+
+
+
+    float cmd, ref, vraw, vf, spdOut, spdLim, off;
+    float angRef, ang, angOut;
+    int pwmL, pwmR, turn;
+    float vl, vr;
+    int basePwm;
+
 	while (1)
 	{
-        runFlagLast=runFlag;
-        // Parse_PID_Commands();
+        
+        Parse_PID_Commands();
 		if(swTimers[1].flag)//打印 当前状态
 		{
 			swTimers[1].flag = 0;
-            bool debugStd=0;
+            bool debugStd=1;
             if(debugStd)
             {
-                // printf("\r\nAnglePID.Kp=%.2f, Ki=%.2f, Kd=%.2f | SpeedPID.Kp=%.2f, Ki=%.2f, Kd=%.2f\r\n", 
-                //     AnglePID.Kp, AnglePID.Ki, AnglePID.Kd, 
-                //     SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-                // printf("SPEEDL = %.2f, SPEEDR = %.2f\r\n", SPEEDL, SPEEDR);
-                
-                // printf(angleAccOffset == 0 ? "Angle Acc Offset: %d (Default)\r\n" : "Angle Acc Offset: %d\r\n", angleAccOffset);
-                // printf("6");
-                
-                // printf("Angle.Kp=%.2f Angle.Ki=%.2f Angle.Kd=%.2f\r\n", AnglePID.Kp, AnglePID.Ki, AnglePID.Kd);
-                // printf("Speed.Kp=%.2f Speed.Ki=%.2f Speed.Kd=%.2f\r\n", SpeedPID.Kp, SpeedPID.Ki, SpeedPID.Kd);
-                // printf("Plot: %d %d \r\n",PWML,PWMR);
-                
-                
-                printf("gxDebug: %d %d %d \r\n", (int)gx, (int)gy, (int)gz);
-                printf("xDebug: %d %d %d \r\n", (int)ax, (int)ay, (int)az);
-                printf("Plot: %f %f %f \r\n",angleAcc,angleGyro,angle);
-            }
+                __disable_irq();   // 只在复制变量时短暂关闭中断
+                vl      = SPEEDL;
+                vr      = SPEEDR;
+                basePwm = PWMAve;
+
+                cmd    = speedCommandCmS;
+                ref    = SpeedPID.Target;
+                vraw   = SPEEDAve;
+                vf     = SpeedPID.Actual;
+                spdOut = SpeedPID.Out;
+                spdLim = SpeedPID.OutMax;
+                off    = speedAngleOffset;
+
+                angRef = AnglePID.Target;
+                ang    = AnglePID.Actual;
+                angOut = AnglePID.Out;
+
+                pwmL   = PWML;
+                pwmR   = PWMR;
+                turn   = PWMDif;
+
+                __enable_irq();    // 必须在 printf 前立刻恢复中断
+
+                printf("cmd=%.1f ref=%.1f raw=%.1f v=%.1f "
+                    "spdOut=%.2f lim=%.1f off=%.2f | "
+                    "angRef=%.2f ang=%.2f angOut=%.1f "
+                    "pwm=%d,%d turn=%d | "
+                    "L=%.1f R=%.1f base=%d\r\n",
+                    cmd, ref, vraw, vf,
+                    spdOut, spdLim, off,
+                    angRef, ang, angOut,
+                    pwmL, pwmR, turn,
+                    vl, vr, basePwm);
+                            }
             else
             {
                 printf("Actual = %.2f, Target = %.2f, Out = %.2f\r\n", SpeedPID.Actual, SpeedPID.Target, SpeedPID.Out);
@@ -350,17 +354,23 @@ int main(void)
         {
             PID_Init(&AnglePID);
             printf("goRunning\r\n"); 
-            if(angle>20)
-            {
-                Motor_SetPWM(1, -60);
-                Motor_SetPWM(2, -60);
-            }
-            else
-            {
-                Motor_SetPWM(1, 80);
-                Motor_SetPWM(2, 80);
-            }
+            // if(angle>20)
+            // {
+            //     Motor_SetPWM(1, -60);
+            //     Motor_SetPWM(2, -60);
+            // }
+            // else
+            // {
+            //     Motor_SetPWM(1, 80);
+            //     Motor_SetPWM(2, 80);
+            // }
         }
+        if (fabsf(angle) > 35.0f)
+        {
+            runFlag = false;
+            speedAngleOffset = 0.0f;
+        }
+        runFlagLast=runFlag;
 
 	}
 }
