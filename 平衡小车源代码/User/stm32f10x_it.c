@@ -223,65 +223,159 @@ float sensorAngleOffset = 0.0f;//安装误差校准
 
 int8_t Motor_DeadzoneCompensate(int8_t pwm)//死区补偿
 {
-    const int8_t DEADZONE = 10;
+    const int8_t MIN_EFFECTIVE_PWM = 10;
     const int8_t EPSILON = 2;
 
-    if (pwm > EPSILON)
-    {
-        return pwm + DEADZONE;
-    }
+    if (pwm >= -EPSILON && pwm <= EPSILON)
+        return 0;
 
-    if (pwm < -EPSILON)
-    {
-        return pwm - DEADZONE;
-    }
+    if (pwm > 0 && pwm < MIN_EFFECTIVE_PWM)
+        return MIN_EFFECTIVE_PWM;
 
-    return 0;
+    if (pwm < 0 && pwm > -MIN_EFFECTIVE_PWM)
+        return -MIN_EFFECTIVE_PWM;
+
+    return pwm;
 }
 
 const float wheelCircumference=3.1416*7;//轮子周长cm
 volatile float speedAngleOffset = 0.0f;
+volatile bool speedEmergencyBrake = false;
 static float speedAveFiltered=0.0f;
+static float turnPwmFiltered=0.0f;
+volatile int16_t encoderDeltaL = 0, encoderDeltaR = 0;
+volatile int32_t encoderTotalL = 0, encoderTotalR = 0;
+
+#define GYRO_CALIBRATION_SETTLE_TICKS  100U
+#define GYRO_CALIBRATION_SAMPLES       400U
+#define GYRO_CALIBRATION_MAX_RAW_SPAN  250
+
 void TIM1_UP_IRQHandler(void)
 {
     static uint8_t global_tick = 0; // 统一的低频任务节拍器
+    static bool gyroCalibrationActive = false;
+    static bool gyroCalibrationJustFinished = false;
+    static uint16_t gyroCalibrationSettleCount = 0;
+    static uint16_t gyroCalibrationCount = 0;
+    static int32_t gyroCalibrationSum = 0;
+    static int16_t gyroCalibrationMin = 32767;
+    static int16_t gyroCalibrationMax = -32768;
     if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET)
     {
+        float correctedGx;
+
         TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
         
         // GPIO_SetBits(GPIOB, GPIO_Pin_0); //调试用，查看中断频率
 
         // 1. 姿态解算  10ms 更新一次
         MPU6050ReadAcc(Accel); MPU6050ReadGyro(Gyro);
-        ay = Accel[1]; az = Accel[2];gx = (Gyro[0]+65);
+        if (gyroCalibrationRequest)
+        {
+            gyroCalibrationRequest = false;
+            gyroCalibrationActive = true;
+            gyroCalibrationSettleCount = 0;
+            gyroCalibrationCount = 0;
+            gyroCalibrationSum = 0;
+            gyroCalibrationMin = 32767;
+            gyroCalibrationMax = -32768;
+        }
+
+        if (gyroCalibrationActive)
+        {
+            if (gyroCalibrationSettleCount < GYRO_CALIBRATION_SETTLE_TICKS)
+            {
+                gyroCalibrationSettleCount++;
+            }
+            else
+            {
+                int16_t rawGx = Gyro[0];
+
+                gyroCalibrationSum += rawGx;
+                gyroCalibrationCount++;
+
+                if (rawGx < gyroCalibrationMin)
+                    gyroCalibrationMin = rawGx;
+                if (rawGx > gyroCalibrationMax)
+                    gyroCalibrationMax = rawGx;
+
+                if (gyroCalibrationCount >= GYRO_CALIBRATION_SAMPLES)
+                {
+                    if ((int32_t)gyroCalibrationMax - gyroCalibrationMin <=
+                        GYRO_CALIBRATION_MAX_RAW_SPAN)
+                    {
+                        gyroXOffset = (float)gyroCalibrationSum /
+                                      (float)GYRO_CALIBRATION_SAMPLES;
+                        gyroCalibrationResult = 1;
+                    }
+                    else
+                    {
+                        /* Keep the previous offset when the car moved during sampling. */
+                        gyroCalibrationResult = 2;
+                    }
+
+                    gyroCalibrationBusy = false;
+                    gyroCalibrationActive = false;
+                    gyroCalibrationJustFinished = true;
+                }
+            }
+        }
+
+        correctedGx = (float)Gyro[0] - gyroXOffset;
+        if (correctedGx > 32767.0f)
+            correctedGx = 32767.0f;
+        else if (correctedGx < -32768.0f)
+            correctedGx = -32768.0f;
+
+        ay = Accel[1]; az = Accel[2]; gx = (int16_t)correctedGx;
         angleAcc = atan2f(ay, az) / 3.14159f * 180.0f + sensorAngleOffset ; 
-        angleGyro = angle + gx / 32768.0f*2000 * 0.005f; 
-        angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro; 
+        if (gyroCalibrationJustFinished)
+        {
+            gyroCalibrationJustFinished = false;
+            angleGyro = angleAcc;
+            angle = angleAcc;
+            PID_Init(&AnglePID);
+            PID_Init(&SpeedPID);
+        }
+        else
+        {
+            angleGyro = angle + correctedGx / 32768.0f * 2000.0f * 0.005f;
+            angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro;
+        }
         // 2. 角度环
         if (runFlag)
         {
-            AnglePID.Target = angleAccOffset+speedAngleOffset;
+            float driveTiltBias;
+            float tiltSpeedError;
+
+            tiltSpeedError = SpeedPID.Target - SpeedPID.Actual;
+
+            if (speedEmergencyBrake)
+            {
+                /* 紧急状态下倾向实际运动方向的反方向，协助电机刹车。 */
+                driveTiltBias = (SpeedPID.Actual >= 0.0f) ?
+                                -SPEED_EMERGENCY_TILT_DEG :
+                                 SPEED_EMERGENCY_TILT_DEG;
+            }
+            else
+            {
+                /*
+                 * 倾角只跟随速度误差并连续过零：低于目标时前倾，
+                 * 超过目标后平滑改为后倾，避免目标倾角来回跳变。
+                 */
+                driveTiltBias = SPEED_TILT_ERROR_GAIN * tiltSpeedError;
+                if (driveTiltBias > SPEED_TILT_ERROR_MAX)
+                    driveTiltBias = SPEED_TILT_ERROR_MAX;
+                else if (driveTiltBias < -SPEED_TILT_ERROR_MAX)
+                    driveTiltBias = -SPEED_TILT_ERROR_MAX;
+            }
+
+            AnglePID.Target = angleAccOffset + driveTiltBias;
             AnglePID.Actual = angle;
             PID_Update(&AnglePID);
 
-            /* 先取得角度环输出 */
-            PWMAve = (int8_t)AnglePID.Out;
-
-            /* 再加入电机启动补偿 */
-            if (fabsf(SpeedPID.Target) > 1.0f &&
-                fabsf(SpeedPID.Actual) < DRIVE_START_SPEED_CM_S)
-            {
-                if (AnglePID.Out > 4.0f &&
-                    AnglePID.Out < DRIVE_START_PWM)
-                {
-                    PWMAve = DRIVE_START_PWM;
-                }
-                else if (AnglePID.Out < -4.0f &&
-                        AnglePID.Out > -DRIVE_START_PWM)
-                {
-                    PWMAve = -DRIVE_START_PWM;
-                }
-            }
+            /* 直立环保持平衡，速度环直接提供行驶 PWM。 */
+            PWMAve = (int8_t)(AnglePID.Out + speedAngleOffset);
             PWML = PWMAve + PWMDif/2; 
             PWMR = PWMAve - PWMDif/2;
 
@@ -290,6 +384,16 @@ void TIM1_UP_IRQHandler(void)
             if(PWMR > 80) PWMR = 80;
             if(PWMR < -80) PWMR = -80;
 
+            /*
+             * 行驶时把角度环的小输出映射到电机有效区间。
+             * 停车时不补偿，避免改变原有的原地平衡效果。
+             */
+            if (fabsf(SpeedPID.Target) > 1.0f)
+            {
+                PWML = Motor_DeadzoneCompensate(PWML);
+                PWMR = Motor_DeadzoneCompensate(PWMR);
+            }
+
             Motor_SetPWM(1, PWML);
             Motor_SetPWM(2, -PWMR);
         }
@@ -297,6 +401,9 @@ void TIM1_UP_IRQHandler(void)
         {
             Motor_SetPWM(1, 0);
             Motor_SetPWM(2, 0);
+            PWML = 0;
+            PWMR = 0;
+            PWMAve = 0;
             PID_Init(&AnglePID);
         }
         // GPIO_ResetBits(GPIOB, GPIO_Pin_0);//调试用，查看中断频率
@@ -312,25 +419,30 @@ void TIM1_UP_IRQHandler(void)
         // }
 
         
-        // 2. 速度环 
+        // 2. 速度环
         if (global_tick == 5 || global_tick == 10 || global_tick == 15 || global_tick == 0)
         {
-          SPEEDL=(-Encoder_Get(1))/ 44.0 / 0.025f / 9.27666* wheelCircumference;//cm/s
-          SPEEDR=(-Encoder_Get(2))/ 44.0 / 0.025f / 9.27666* wheelCircumference;
+          encoderDeltaL = -Encoder_Get(1);
+          encoderDeltaR = -Encoder_Get(2);
+          encoderTotalL += encoderDeltaL;
+          encoderTotalR += encoderDeltaR;
+
+          SPEEDL=encoderDeltaL / 44.0f / 0.025f / 9.27666f * wheelCircumference;//cm/s
+          SPEEDR=encoderDeltaR / 44.0f / 0.025f / 9.27666f * wheelCircumference;
           SPEEDAve = (SPEEDL + SPEEDR) / 2;
 
 
           float speedFilterAlpha;
           if (fabsf(SPEEDAve) > 20.0f)
           {
-              speedFilterAlpha = 0.6f;   // 大速度时快速跟随
+              speedFilterAlpha = 0.40f;
           }
           else
           {
-              speedFilterAlpha = 0.25f;  // 低速时平滑
+              speedFilterAlpha = 0.10f;
           }
 
-          speedAveFiltered += 0.25f *
+          speedAveFiltered += speedFilterAlpha *
                               (SPEEDAve - speedAveFiltered);
 
           SPEEDDif = SPEEDL - SPEEDR;
@@ -338,8 +450,10 @@ void TIM1_UP_IRQHandler(void)
           {
               float targetStep;
               float targetDelta;
-              bool overspeed;
+              float turnStep;
+              float turnDelta;
               float speedError;
+              bool overspeed;
               float speedFeedForward;
               /* 避免摇杆一推到底时，目标速度瞬间跳变 */
               targetStep = SPEED_TARGET_ACCEL_CM_S2 * SPEED_LOOP_DT;
@@ -352,10 +466,54 @@ void TIM1_UP_IRQHandler(void)
               else
                   SpeedPID.Target = speedCommandCmS;
 
+              /* Smooth the steering command before mixing left/right PWM. */
+              turnStep = TURN_PWM_SLEW_PER_S * SPEED_LOOP_DT;
+              turnDelta = turnCommandPwm - turnPwmFiltered;
+
+              if (turnDelta > turnStep)
+                  turnPwmFiltered += turnStep;
+              else if (turnDelta < -turnStep)
+                  turnPwmFiltered -= turnStep;
+              else
+                  turnPwmFiltered = turnCommandPwm;
+
+              PWMDif = (int8_t)turnPwmFiltered;
+
               SpeedPID.Actual = speedAveFiltered;
+              if (!speedEmergencyBrake &&
+                  fabsf(SpeedPID.Actual) >= SPEED_HARD_LIMIT_CM_S)
+              {
+                  speedEmergencyBrake = true;
+              }
+              else if (speedEmergencyBrake &&
+                       fabsf(SpeedPID.Actual) <= SPEED_HARD_RELEASE_CM_S)
+              {
+                  speedEmergencyBrake = false;
+              }
+
+              /* 高速紧急制动时先取消转向，保留两侧全部制动力。 */
+              if (speedEmergencyBrake)
+              {
+                  turnPwmFiltered = 0.0f;
+                  PWMDif = 0;
+              }
+
               if (fabsf(SpeedPID.Target) < 0.5f &&fabsf(SpeedPID.Actual) < 2.0f)
               {
                   SpeedPID.Actual = 0.0f;
+                  SpeedPID.ErrorInt = 0.0f;
+              }
+
+              speedError = SpeedPID.Target - SpeedPID.Actual;
+
+              /*
+               * When the speed error reverses, discard integral accumulated
+               * for the old direction. Otherwise the car keeps braking after
+               * it has already slowed below the target and comes to a stop.
+               */
+              if ((speedError > 1.0f && SpeedPID.ErrorInt < 0.0f) ||
+                  (speedError < -1.0f && SpeedPID.ErrorInt > 0.0f))
+              {
                   SpeedPID.ErrorInt = 0.0f;
               }
 
@@ -363,8 +521,6 @@ void TIM1_UP_IRQHandler(void)
               * 实际速度已经超过目标速度时，开放更大的倾角用于刹车；
               * 正常行驶时仍限制较小倾角，避免满摇杆摔车。
               */
-              speedError = SpeedPID.Target - SpeedPID.Actual;
-
               overspeed =
                   (SpeedPID.Target > 0.5f &&
                   SpeedPID.Actual > SpeedPID.Target + 1.5f) ||
@@ -375,51 +531,59 @@ void TIM1_UP_IRQHandler(void)
                   (fabsf(SpeedPID.Target) <= 0.5f &&
                   fabsf(SpeedPID.Actual) > 1.5f);
 
-              if (overspeed)
-              {
-                  speedFeedForward = 0.0f;
-              }
-              else
-              {
-                  speedFeedForward =
-                      SPEED_CMD_FF_GAIN * SpeedPID.Target;
-              }
-
-              SpeedPID.OutMin = -SpeedPID.OutMax;
-
-
-
+              /* 超速时取消同方向前馈，避免抵消速度 PI 的刹车输出。 */
+              speedFeedForward = overspeed ? 0.0f :
+                                 SPEED_PWM_FF_GAIN * SpeedPID.Target;
 
               SpeedPID.OutMax = overspeed ?
-                                SPEED_BRAKE_TILT_MAX_DEG :
-                                SPEED_DRIVE_TILT_MAX_DEG;
+                                SPEED_BRAKE_PWM_MAX :
+                                SPEED_DRIVE_PWM_MAX;
 
               SpeedPID.OutMin = -SpeedPID.OutMax;
 
               PID_Update(&SpeedPID);
 
+              if (speedEmergencyBrake)
+              {
+                  SpeedPID.ErrorInt = 0.0f;
+                  SpeedPID.OutMax = SPEED_EMERGENCY_PWM;
+                  SpeedPID.OutMin = -SPEED_EMERGENCY_PWM;
+                  SpeedPID.Out = (SpeedPID.Actual >= 0.0f) ?
+                                 -SPEED_EMERGENCY_PWM :
+                                  SPEED_EMERGENCY_PWM;
+                  speedFeedForward = 0.0f;
+              }
+
 
               /* 摇杆直行前馈：Target 已经经过加减速斜坡处理 */
 
 
-              if (speedFeedForward > SPEED_CMD_FF_MAX_DEG)
-                  speedFeedForward = SPEED_CMD_FF_MAX_DEG;
-              else if (speedFeedForward < -SPEED_CMD_FF_MAX_DEG)
-                  speedFeedForward = -SPEED_CMD_FF_MAX_DEG;
+              if (speedFeedForward > SPEED_PWM_FF_MAX)
+                  speedFeedForward = SPEED_PWM_FF_MAX;
+              else if (speedFeedForward < -SPEED_PWM_FF_MAX)
+                  speedFeedForward = -SPEED_PWM_FF_MAX;
 
-              /* 前馈负责起步，SpeedPID.Out 负责速度修正/刹车 */
-              speedAngleOffset = speedFeedForward + SpeedPID.Out;
+              /*
+               * 平衡车必须先移动轮子建立行驶倾角，再由直立环追上车身。
+               * 因此这里保留与倾角目标一致的输出方向，不能按编码器
+               * 速度符号直接翻转，否则两个控制量会互相抵消并导致摔倒。
+               */
+              speedAngleOffset = SPEED_PWM_OUTPUT_SIGN *
+                                 (speedFeedForward + SpeedPID.Out);
 
-              if (speedAngleOffset > SPEED_TOTAL_TILT_MAX_DEG)
-                  speedAngleOffset = SPEED_TOTAL_TILT_MAX_DEG;
-              else if (speedAngleOffset < -SPEED_TOTAL_TILT_MAX_DEG)
-                  speedAngleOffset = -SPEED_TOTAL_TILT_MAX_DEG;
+              if (speedAngleOffset > SPEED_TOTAL_PWM_MAX)
+                  speedAngleOffset = SPEED_TOTAL_PWM_MAX;
+              else if (speedAngleOffset < -SPEED_TOTAL_PWM_MAX)
+                  speedAngleOffset = -SPEED_TOTAL_PWM_MAX;
                         }
           else
           {
               speedAngleOffset = 0.0f;
               speedAveFiltered = 0.0f;
+              turnPwmFiltered = 0.0f;
+              speedEmergencyBrake = false;
               speedCommandCmS = 0.0f;
+              turnCommandPwm = 0.0f;
               PID_Init(&SpeedPID);
               speedCommandCmS = 0.0f;
               PWMDif = 0;

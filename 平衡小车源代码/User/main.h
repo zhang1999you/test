@@ -11,21 +11,39 @@ void Parse_PID_Commands(void);
 
 
 #define BLE_SPEED_FULL_SCALE        100.0f
-#define MAX_COMMAND_SPEED_CM_S       5.0f   // 先从 15 开始，稳定后可试 20
-#define SPEED_TARGET_ACCEL_CM_S2     15.0f
+#define MAX_COMMAND_SPEED_CM_S      30.0f
+#define SPEED_TARGET_ACCEL_CM_S2     17.0f
 #define SPEED_LOOP_DT                0.025f
-#define SPEED_DRIVE_TILT_MAX_DEG      0.8f   // 蓝牙正常行驶最大倾角
-#define SPEED_BRAKE_TILT_MAX_DEG      0.8f   // 被推快后允许更强刹车
 
-#define SPEED_CMD_FF_GAIN            0.10f  // ° / (cm/s)
-#define SPEED_CMD_FF_MAX_DEG          1.2f
-#define SPEED_TOTAL_TILT_MAX_DEG      1.6f
+#define BLE_TURN_FULL_SCALE         100.0f
+#define MAX_TURN_PWM                 24.0f
+#define TURN_PWM_SLEW_PER_S          80.0f
+#define SPEED_DRIVE_PWM_MAX           28.0f
+#define SPEED_BRAKE_PWM_MAX           30.0f
+
+#define SPEED_PWM_FF_GAIN              0.65f // PWM / (cm/s)
+#define SPEED_PWM_FF_MAX              10.0f
+#define SPEED_TOTAL_PWM_MAX           40.0f
+#define SPEED_PWM_OUTPUT_SIGN           1.0f // 速度输出先用于建立行驶倾角，不直接按编码器方向翻转
+
+#define SPEED_TILT_ERROR_GAIN           0.05f // degrees / (cm/s error)
+#define SPEED_TILT_ERROR_MAX            1.5f
+#define SPEED_HARD_LIMIT_CM_S         65.0f
+#define SPEED_HARD_RELEASE_CM_S       45.0f
+#define SPEED_EMERGENCY_PWM            40.0f
+#define SPEED_EMERGENCY_TILT_DEG        3.0f
 
 #define DRIVE_START_PWM              12
 #define DRIVE_START_SPEED_CM_S       1.0f
 #define DRIVE_START_ANGLE_ERR_DEG    0.4f
 
 extern volatile float speedCommandCmS;
+extern volatile float turnCommandPwm;
+extern volatile bool speedEmergencyBrake;
+extern volatile bool gyroCalibrationRequest;
+extern volatile bool gyroCalibrationBusy;
+extern volatile uint8_t gyroCalibrationResult;
+extern volatile float gyroXOffset;
 
 
 extern short Accel[3];
@@ -42,8 +60,10 @@ extern volatile int8_t PWMAve, PWMDif;
 
 extern volatile float SPEEDL, SPEEDR;
 extern volatile float SPEEDAve, SPEEDDif;
+extern volatile int16_t encoderDeltaL, encoderDeltaR;
+extern volatile int32_t encoderTotalL, encoderTotalR;
 
-extern bool runFlag;
+extern volatile bool runFlag;
 extern float angleAccOffset;
 extern PID_t AnglePID;
 extern PID_t SpeedPID;

@@ -26,6 +26,8 @@
 #define DEBUG_USART_RX_GPIO_PORT GPIOA                  // GPIOA
 #define DEBUG_USART_IRQn        USART1_IRQn             // 中断号也要改
 #define DEBUG_USART_BAUDRATE     115200
+// #define DEBUG_USART_BAUDRATE     57600
+
 
 
 
