@@ -47,7 +47,7 @@ volatile int8_t PWMAve = 0, PWMDif = 0;
 volatile float SPEEDL = 0, SPEEDR = 0;
 volatile float SPEEDAve = 0, SPEEDDif = 0;
 volatile float speedCommandCmS = 0.0f;
-volatile float turnCommandPwm = 0.0f;
+volatile float turnCommandDiffCmS = 0.0f;
 volatile bool gyroCalibrationRequest = false;
 volatile bool gyroCalibrationBusy = false;
 volatile uint8_t gyroCalibrationResult = 0;
@@ -88,6 +88,23 @@ PID_t SpeedPID={
     .OutMin = -SPEED_DRIVE_PWM_MAX,
 };
 
+PID_t TurnPID={
+    .Target = 0,
+    .Actual = 0,
+    .Out = 0,
+
+    .Kp = 2.0f,
+    .Ki = 0.0f,
+    .Kd = 0.0f,
+
+    .Error0 = 0,
+    .Error1 = 0,
+    .ErrorInt = 0,
+
+    .OutMax = TURN_PWM_MAX,
+    .OutMin = -TURN_PWM_MAX,
+};
+
 void Parse_PID_Commands(void)
 {
     if (RxFlag == 1)
@@ -105,6 +122,10 @@ void Parse_PID_Commands(void)
         else if ((p_cmd = strstr(RxBuffer, "AnglePID.kp:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kp:%f", &temp_val) == 1) {AnglePID.Kp = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "AnglePID.ki:")) != NULL) { if(sscanf(p_cmd, "AnglePID.ki:%f", &temp_val) == 1) {AnglePID.Ki = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "AnglePID.kd:")) != NULL) { if(sscanf(p_cmd, "AnglePID.kd:%f", &temp_val) == 1) {AnglePID.Kd = temp_val; match_success = true;} }
+
+        else if ((p_cmd = strstr(RxBuffer, "TurnPID.kp:")) != NULL) { if(sscanf(p_cmd, "TurnPID.kp:%f", &temp_val) == 1) {TurnPID.Kp = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "TurnPID.ki:")) != NULL) { if(sscanf(p_cmd, "TurnPID.ki:%f", &temp_val) == 1) {TurnPID.Ki = temp_val; match_success = true;} }
+        else if ((p_cmd = strstr(RxBuffer, "TurnPID.kd:")) != NULL) { if(sscanf(p_cmd, "TurnPID.kd:%f", &temp_val) == 1) {TurnPID.Kd = temp_val; match_success = true;} }
         
         else if ((p_cmd = strstr(RxBuffer, "runFlag:")) != NULL) {
             if (sscanf(p_cmd, "runFlag:%d", &temp_int) == 1) {
@@ -121,7 +142,7 @@ void Parse_PID_Commands(void)
                     /* Calibration must run with both motors stopped and no pending drive command. */
                     runFlag = false;
                     speedCommandCmS = 0.0f;
-                    turnCommandPwm = 0.0f;
+                    turnCommandDiffCmS = 0.0f;
                     gyroCalibrationResult = 0;
                     gyroCalibrationBusy = true;
                     gyroCalibrationRequest = true;
@@ -141,7 +162,7 @@ void Parse_PID_Commands(void)
                     temp_val = BLE_SPEED_FULL_SCALE;
                 else if (temp_val < -BLE_SPEED_FULL_SCALE)
                     temp_val = -BLE_SPEED_FULL_SCALE;
-                // 小程序摇杆范围是 -100 ~ 100，换算为实际速度和差速转向目标。
+                // 小程序摇杆范围是 -100 ~ 100，换算为实际速度和左右轮速度差目标。
                 speedCommandCmS = temp_val * MAX_COMMAND_SPEED_CM_S / BLE_SPEED_FULL_SCALE;
 
                 if (temp_int > (int)BLE_TURN_FULL_SCALE)
@@ -149,7 +170,8 @@ void Parse_PID_Commands(void)
                 else if (temp_int < -(int)BLE_TURN_FULL_SCALE)
                     temp_int = -(int)BLE_TURN_FULL_SCALE;
 
-                turnCommandPwm = temp_int * MAX_TURN_PWM / BLE_TURN_FULL_SCALE;
+                turnCommandDiffCmS = temp_int * MAX_TURN_DIFF_CM_S /
+                                     BLE_TURN_FULL_SCALE;
                 match_success = true;
             } 
         }
@@ -330,6 +352,7 @@ int main(void)
     float angRef, ang, angOut;
     float accAngle, gyroRate;
     int pwmL, pwmR, turn;
+    float turnRef, turnActual, turnOut;
     int emergencyBrake;
     int encDeltaL, encDeltaR;
     float vl, vr;
@@ -361,7 +384,7 @@ int main(void)
 		if(swTimers[1].flag)//打印 当前状态
 		{
 			swTimers[1].flag = 0;
-            bool debugStd=0;
+            bool debugStd=1;
             if(debugStd)
             {
                 __disable_irq();   // 只在复制变量时短暂关闭中断
@@ -386,6 +409,9 @@ int main(void)
                 pwmL   = PWML;
                 pwmR   = PWMR;
                 turn   = PWMDif;
+                turnRef = TurnPID.Target;
+                turnActual = TurnPID.Actual;
+                turnOut = TurnPID.Out;
                 emergencyBrake = speedEmergencyBrake ? 1 : 0;
                 encDeltaL = encoderDeltaL;
                 encDeltaR = encoderDeltaR;
@@ -400,14 +426,14 @@ int main(void)
                 printf("cmd=%.1f ref=%.1f raw=%.1f v=%.1f "
                     "spdOut=%.2f lim=%.1f spdPWM=%.2f | "
                     "angRef=%.2f ang=%.2f angOut=%.1f "
-                    "pwm=%d,%d turn=%d | "
+                    "pwm=%d,%d turn=%.1f/%.1f/%.1f/%d | "
                     "L=%.1f R=%.1f base=%d | "
                     "acc=%.2f gyro=%.1f cnt=%d,%d pos=%ld,%ld "
                     "ccr=%u,%u dir=%X ebrake=%d\r\n",
                     cmd, ref, vraw, vf,
                     spdOut, spdLim, off,
                     angRef, ang, angOut,
-                    pwmL, pwmR, turn,
+                    pwmL, pwmR, turnRef, turnActual, turnOut, turn,
                     vl, vr, basePwm,
                     accAngle, gyroRate,
                     encDeltaL, encDeltaR, encTotalL, encTotalR,

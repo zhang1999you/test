@@ -242,7 +242,8 @@ const float wheelCircumference=3.1416*7;//轮子周长cm
 volatile float speedAngleOffset = 0.0f;
 volatile bool speedEmergencyBrake = false;
 static float speedAveFiltered=0.0f;
-static float turnPwmFiltered=0.0f;
+static float turnTargetFiltered=0.0f;
+static float turnSpeedFiltered=0.0f;
 volatile int16_t encoderDeltaL = 0, encoderDeltaR = 0;
 volatile int32_t encoderTotalL = 0, encoderTotalR = 0;
 
@@ -450,8 +451,9 @@ void TIM1_UP_IRQHandler(void)
           {
               float targetStep;
               float targetDelta;
-              float turnStep;
-              float turnDelta;
+              float turnTargetStep;
+              float turnTargetDelta;
+              float turnOutput;
               float speedError;
               bool overspeed;
               float speedFeedForward;
@@ -466,18 +468,42 @@ void TIM1_UP_IRQHandler(void)
               else
                   SpeedPID.Target = speedCommandCmS;
 
-              /* Smooth the steering command before mixing left/right PWM. */
-              turnStep = TURN_PWM_SLEW_PER_S * SPEED_LOOP_DT;
-              turnDelta = turnCommandPwm - turnPwmFiltered;
+              /* Ramp the requested left/right wheel speed difference. */
+              turnTargetStep = TURN_TARGET_ACCEL_CM_S2 * SPEED_LOOP_DT;
+              turnTargetDelta = turnCommandDiffCmS - turnTargetFiltered;
 
-              if (turnDelta > turnStep)
-                  turnPwmFiltered += turnStep;
-              else if (turnDelta < -turnStep)
-                  turnPwmFiltered -= turnStep;
+              if (turnTargetDelta > turnTargetStep)
+                  turnTargetFiltered += turnTargetStep;
+              else if (turnTargetDelta < -turnTargetStep)
+                  turnTargetFiltered -= turnTargetStep;
               else
-                  turnPwmFiltered = turnCommandPwm;
+                  turnTargetFiltered = turnCommandDiffCmS;
 
-              PWMDif = (int8_t)turnPwmFiltered;
+              /*
+               * Positive PWMDif makes SPEEDL - SPEEDR positive on this chassis.
+               * Use the same sign for feedback so the turn loop is negative feedback.
+               */
+              turnSpeedFiltered += TURN_FEEDBACK_FILTER_ALPHA *
+                                   (SPEEDDif - turnSpeedFiltered);
+
+              TurnPID.Target = turnTargetFiltered;
+              TurnPID.Actual = turnSpeedFiltered;
+
+              if (fabsf(TurnPID.Target) < 0.5f &&
+                  fabsf(TurnPID.Actual) < 1.5f)
+              {
+                  TurnPID.Target = 0.0f;
+                  TurnPID.Actual = 0.0f;
+                  TurnPID.ErrorInt = 0.0f;
+              }
+
+              PID_Update(&TurnPID);
+              turnOutput = TurnPID.Out;
+
+              if (turnOutput >= 0.0f)
+                  PWMDif = (int8_t)(turnOutput + 0.5f);
+              else
+                  PWMDif = (int8_t)(turnOutput - 0.5f);
 
               SpeedPID.Actual = speedAveFiltered;
               if (!speedEmergencyBrake &&
@@ -494,8 +520,9 @@ void TIM1_UP_IRQHandler(void)
               /* 高速紧急制动时先取消转向，保留两侧全部制动力。 */
               if (speedEmergencyBrake)
               {
-                  turnPwmFiltered = 0.0f;
                   PWMDif = 0;
+                  TurnPID.ErrorInt = 0.0f;
+                  TurnPID.Out = 0.0f;
               }
 
               if (fabsf(SpeedPID.Target) < 0.5f &&fabsf(SpeedPID.Actual) < 2.0f)
@@ -580,11 +607,13 @@ void TIM1_UP_IRQHandler(void)
           {
               speedAngleOffset = 0.0f;
               speedAveFiltered = 0.0f;
-              turnPwmFiltered = 0.0f;
+              turnTargetFiltered = 0.0f;
+              turnSpeedFiltered = 0.0f;
               speedEmergencyBrake = false;
               speedCommandCmS = 0.0f;
-              turnCommandPwm = 0.0f;
+              turnCommandDiffCmS = 0.0f;
               PID_Init(&SpeedPID);
+              PID_Init(&TurnPID);
               speedCommandCmS = 0.0f;
               PWMDif = 0;
           }

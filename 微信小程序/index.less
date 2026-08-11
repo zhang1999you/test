@@ -1,0 +1,394 @@
+.receive-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.copy-btn {
+  font-size: 20rpx;
+  padding: 4rpx 15rpx;
+  background: #1677ff;
+  color: #fff;
+  border-radius: 20rpx;
+}
+
+.log-line {
+  display: block;
+  color: #00ff41;
+  white-space: nowrap;
+}
+
+
+.root-scroll {
+  height: 100vh;
+  background: #f6f6f8;
+}
+
+.container {
+  width: 100%;
+}
+
+.control-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10rpx 0 4rpx 0;
+  box-sizing: border-box;
+}
+
+/* 摇杆 */
+
+.joystick-base {
+  width: 480rpx;
+  height: 480rpx;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-handle {
+  width: 160rpx;
+  height: 160rpx;
+  background: radial-gradient(circle, #07c160, #06ae56);
+  border-radius: 50%;
+}
+
+/* 状态 */
+
+.debug-info {
+  margin-top: 20rpx;
+  text-align: center;
+}
+
+.speed-text {
+  font-size: 34rpx;
+  color: #222;
+}
+
+.status-text {
+  margin-top: 10rpx;
+  font-size: 28rpx;
+}
+
+.status-text.online {
+  color: #07c160;
+}
+
+.status-text.offline {
+  color: #999;
+}
+
+/* 曲线窗口 */
+
+.plot-container {
+  width: 96%;
+  max-width: 840rpx;
+  margin: 16rpx 0 8rpx 0;
+  padding: 14rpx;
+  border-radius: 18rpx;
+  background: #111;
+  box-sizing: border-box;
+}
+
+.plot-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+}
+
+.plot-title {
+  font-size: 24rpx;
+  color: #d0d0d0;
+}
+
+.plot-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.plot-btn {
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #cfcfcf;
+  background: #2b2b2b;
+}
+
+.plot-btn.on {
+  color: #fff;
+  background: #07c160;
+}
+
+.plot-current {
+  font-size: 20rpx;
+  color: #bfc7d5;
+  line-height: 1.4;
+  padding: 6rpx 0 2rpx 0;
+}
+
+.plot-canvas {
+  width: 100%;
+  height: 320rpx;
+  background: #141414;
+  border-radius: 12rpx;
+}
+
+/* 接收区 */
+
+.receive-container {
+  width: 96%;
+  max-width: 840rpx;
+  height: 460rpx;
+  background: #1a1a1a;
+  border-radius: 18rpx;
+  margin: 16rpx 0 8rpx 0;
+  padding: 14rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.receive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1rpx solid #333;
+  padding-bottom: 10rpx;
+  margin-bottom: 10rpx;
+}
+
+.receive-title {
+  font-size: 20rpx;
+  color: #888;
+}
+
+.stop-btn {
+  font-size: 20rpx;
+  padding: 4rpx 15rpx;
+  background: #444;
+  color: #fff;
+  border-radius: 20rpx;
+}
+
+.stop-btn.stopped {
+  background: #07c160;
+}
+
+.receive-log-view {
+  flex: 1;
+  height: 0;
+  width: 100%;
+  font-family: monospace;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.receive-log-inner {
+  width: max-content;
+  min-width: 100%;
+  padding-right: 20rpx;
+  box-sizing: border-box;
+}
+
+.log-item {
+  width: max-content;
+  min-width: 100%;
+  padding: 4rpx 0;
+  border-bottom: 1rpx solid #222;
+  white-space: nowrap;
+}
+
+.log-time {
+  display: inline-block;
+  width: 170rpx;
+  color: #555;
+}
+
+.log-text {
+  display: inline-block;
+  color: #00ff41;
+  white-space: nowrap;
+}
+
+.empty-log {
+  color: #666;
+  padding: 20rpx 0;
+}
+
+/* 蓝牙设备 */
+
+.device-list {
+  width: 96%;
+  max-height: 420rpx;
+  margin: 20rpx 0 10rpx;
+  padding: 12rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  box-sizing: border-box;
+}
+
+.device-item {
+  padding: 22rpx 20rpx;
+  margin-bottom: 14rpx;
+  border-radius: 16rpx;
+  background: #f8f9fb;
+}
+
+.device-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 8rpx;
+}
+
+.device-id {
+  font-size: 22rpx;
+  color: #999;
+  font-family: monospace;
+}
+
+.device-empty {
+  padding: 30rpx 10rpx;
+  color: #999;
+  font-size: 24rpx;
+}
+
+/* 主按钮 */
+
+.main-btn {
+  width: 80% !important;
+  margin-top: 10rpx;
+}
+
+/* 提示 */
+
+.scroll-hint {
+  font-size: 20rpx;
+  color: #bbb;
+  margin: 6rpx 0 4rpx 0;
+}
+
+/* 系统参数 */
+
+.sys-section {
+  width: 100%;
+  padding: 12rpx 30rpx 10rpx;
+  background: #fff;
+  border-top: 1rpx solid #eee;
+  box-sizing: border-box;
+}
+
+.sys-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18rpx;
+}
+
+.sys-label {
+  width: 140rpx;
+  font-size: 24rpx;
+  color: #666;
+}
+
+.angleAcc-slider {
+  flex: 1;
+  transform: scale(0.9);
+  transform-origin: left center;
+}
+
+.run-btn {
+  width: 100%;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.run-btn.on {
+  background: #07c160;
+  color: #fff;
+}
+
+.run-btn.off {
+  background: #f2f2f2;
+  color: #e74c3c;
+}
+
+.gyro-cal-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.gyro-cal-btn {
+  width: 100%;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #fff;
+  background: #1677ff;
+}
+
+.gyro-cal-btn[disabled] {
+  color: rgba(255, 255, 255, 0.8);
+  background: #8bb8f5;
+}
+
+.gyro-cal-status {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #666;
+  text-align: center;
+}
+
+/* PID 参数 */
+
+.pid-section {
+  width: 100%;
+  padding: 12rpx 30rpx 30rpx;
+  background: #fff;
+  border-top: 1rpx solid #eee;
+  box-sizing: border-box;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+  color: #333;
+}
+
+.pid-group {
+  background: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 15rpx;
+  margin-bottom: 20rpx;
+}
+
+.group-header {
+  font-size: 24rpx;
+  color: #07c160;
+  margin-bottom: 10rpx;
+}
+
+.pid-row {
+  display: flex;
+  align-items: center;
+}
+
+.pid-row text {
+  width: 30rpx;
+  font-size: 22rpx;
+  color: #666;
+}
+
+.small-slider {
+  flex: 1;
+  transform: scale(0.8);
+  transform-origin: left center;
+}

@@ -1,0 +1,252 @@
+<scroll-view
+  class="root-scroll"
+  scroll-y="{{connected}}"
+  enhanced
+  show-scrollbar="{{false}}"
+>
+  <view class="container">
+    <view class="control-section">
+
+      <view class="joystick-base" id="joy-base">
+        <view
+          class="joystick-handle"
+          style="transform: translate({{stickX}}px, {{stickY}}px);"
+          catchtouchstart="onTouchStart"
+          catchtouchmove="onTouchMove"
+          catchtouchend="onTouchEnd"
+        >
+        </view>
+      </view>
+
+      <view class="debug-info">
+        <view class="speed-text">
+          速度: {{speed}} | 转向: {{turn}}
+        </view>
+        <view class="status-text {{connected ? 'online' : 'offline'}}">
+          {{statusMsg}}
+        </view>
+      </view>
+
+      <!-- 曲线窗口 -->
+      <view class="plot-container" style="display: {{connected ? 'block' : 'none'}};">
+  <view class="plot-header">
+    <text class="plot-title">姿态曲线 (Plot)</text>
+    <view class="plot-btn-group">
+      <view
+        class="plot-btn {{plotShowAcc ? 'on' : ''}}"
+        bindtap="togglePlotSeries"
+        data-key="angleAcc"
+      >
+        angleAcc
+      </view>
+      <view
+        class="plot-btn {{plotShowGyro ? 'on' : ''}}"
+        bindtap="togglePlotSeries"
+        data-key="angleGyro"
+      >
+        angleGyro
+      </view>
+      <view
+        class="plot-btn {{plotShowAngle ? 'on' : ''}}"
+        bindtap="togglePlotSeries"
+        data-key="angle"
+      >
+        angle
+      </view>
+    </view>
+    <view class="plot-current">
+      {{plotCurrentText}}
+    </view>
+  </view>
+
+  <canvas
+    canvas-id="plot-canvas"
+    class="plot-canvas"
+    width="{{plotCanvasW}}"
+    height="{{plotCanvasH}}"
+    style="width: {{plotCanvasW}}px; height: {{plotCanvasH}}px;"
+  ></canvas>
+</view>
+
+      <view class="receive-container" wx:if="{{connected}}">
+        <view class="receive-header">
+            <text class="receive-title">数据监控 (HEX/ASCII)</text>
+
+            <view class="receive-actions">
+              <view class="copy-btn" bindtap="copyReceivedLogs">
+                复制日志
+              </view>
+
+              <view
+                class="stop-btn {{isReceiving ? '' : 'stopped'}}"
+                bindtap="toggleReceive"
+              >
+                {{isReceiving ? '停止接收' : '开启接收'}}
+              </view>
+            </view>
+          </view>
+
+        <scroll-view
+          class="receive-log-view"
+          scroll-y
+          scroll-x
+          scroll-with-animation="true"
+          scroll-into-view="{{scrollIntoViewId}}"
+          enhanced
+          show-scrollbar="{{true}}"
+        >
+          <view class="receive-log-inner">
+            <view
+              wx:for="{{receivedMsgs}}"
+              wx:for-item="item"
+              wx:key="index"
+              class="log-item"
+              id="log-{{index}}"
+            >
+            <text selectable="{{true}}" class="log-line">
+                [{{item.time}}] {{item.text}}
+              </text>
+            </view>
+
+            <view wx:if="{{receivedMsgs.length === 0}}" class="empty-log">
+              等待数据传输...
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <scroll-view
+        class="device-list"
+        scroll-y
+        wx:if="{{!connected && devices.length > 0}}"
+      >
+        <view
+          class="device-item"
+          wx:for="{{devices}}"
+          wx:key="deviceId"
+          bindtap="handleConnect"
+          data-id="{{item.deviceId}}"
+        >
+          <view class="device-name">
+            {{item.name || item.localName || '未命名设备'}}
+          </view>
+          <view class="device-id">
+            {{item.deviceId}}
+          </view>
+        </view>
+      </scroll-view>
+
+      <view
+        class="device-empty"
+        wx:if="{{!connected && isScanning && devices.length === 0}}"
+      >
+        正在搜索附近蓝牙设备...
+      </view>
+
+      <button
+        class="btn main-btn"
+        type="{{connected ? 'warn' : 'primary'}}"
+        bindtap="startConnect"
+      >
+        {{connected ? '断开连接' : (isScanning ? '停止搜索' : '搜索蓝牙设备')}}
+      </button>
+
+      <view class="scroll-hint" wx:if="{{connected}}">
+        ↑ 上滑调节 PID 参数 ↑
+      </view>
+    </view>
+
+    <view class="sys-section" wx:if="{{connected}}">
+      <view class="section-title">
+        系统参数
+      </view>
+
+      <view class="sys-row">
+        <button
+          class="run-btn {{runFlag ? 'on' : 'off'}}"
+          bindtap="toggleRunFlag"
+          disabled="{{gyroCalibrating}}"
+        >
+          {{runFlag ? '停止运行' : '开始运行'}}
+        </button>
+      </view>
+
+      <view class="sys-row gyro-cal-row">
+        <button
+          class="gyro-cal-btn"
+          bindtap="startGyroCalibration"
+          disabled="{{gyroCalibrating}}"
+          loading="{{gyroCalibrating}}"
+        >
+          {{gyroCalibrating ? '标定中，请勿移动' : '标定 gx 零飘'}}
+        </button>
+        <text class="gyro-cal-status">
+          {{gyroCalibrationStatus}}
+        </text>
+      </view>
+
+      <view class="sys-row">
+  <text class="sys-label">
+    angleAccOffset
+  </text>
+  <slider
+    class="angleAcc-slider"
+    min="-15"
+    max="15"
+    step="0.1"  show-value
+    value="{{angleAccOffset}}"
+    bindchange="onAngleAccOffsetChange"
+  />
+</view>
+    </view>
+
+    <view class="pid-section" wx:if="{{connected}}">
+      <view class="section-title">
+        PID 参数细调
+      </view>
+
+      <view
+        class="pid-group"
+        wx:for="{{['AnglePID', 'SpeedPID', 'TurnPID']}}"
+        wx:for-item="type"
+        wx:key="*this"
+      >
+        <view class="group-header">
+          {{type}} 控制
+        </view>
+
+        <view
+          class="pid-row"
+          wx:for="{{['kp', 'ki', 'kd']}}"
+          wx:for-item="param"
+          wx:key="*this"
+        >
+          <text>
+            {{param === 'kp' ? 'P' : (param === 'ki' ? 'I' : 'D')}}
+          </text>
+
+          <slider
+            class="small-slider"
+            bindchange="onPidChange"
+            data-type="{{type}}"
+            data-param="{{param}}"
+            min="0"
+            max="10"
+            step="0.1"
+            show-value
+            value="{{
+              type === 'AnglePID'
+                ? anglePID[param]
+                : (
+                    type === 'SpeedPID'
+                      ? speedPID[param]
+                      : turnPID[param]
+                  )
+            }}"
+          />
+        </view>
+      </view>
+    </view>
+
+  </view>
+</scroll-view>

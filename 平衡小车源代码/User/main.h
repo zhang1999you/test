@@ -16,8 +16,10 @@ void Parse_PID_Commands(void);
 #define SPEED_LOOP_DT                0.025f
 
 #define BLE_TURN_FULL_SCALE         100.0f
-#define MAX_TURN_PWM                 24.0f
-#define TURN_PWM_SLEW_PER_S          80.0f
+#define MAX_TURN_DIFF_CM_S           30.0f
+#define TURN_TARGET_ACCEL_CM_S2      80.0f
+#define TURN_FEEDBACK_FILTER_ALPHA    0.25f
+#define TURN_PWM_MAX                 32.0f
 #define SPEED_DRIVE_PWM_MAX           28.0f
 #define SPEED_BRAKE_PWM_MAX           30.0f
 
@@ -38,7 +40,7 @@ void Parse_PID_Commands(void);
 #define DRIVE_START_ANGLE_ERR_DEG    0.4f
 
 extern volatile float speedCommandCmS;
-extern volatile float turnCommandPwm;
+extern volatile float turnCommandDiffCmS;
 extern volatile bool speedEmergencyBrake;
 extern volatile bool gyroCalibrationRequest;
 extern volatile bool gyroCalibrationBusy;
@@ -67,6 +69,7 @@ extern volatile bool runFlag;
 extern float angleAccOffset;
 extern PID_t AnglePID;
 extern PID_t SpeedPID;
+extern PID_t TurnPID;
 #endif /* __MAIN_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
