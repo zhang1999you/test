@@ -48,6 +48,9 @@ volatile float SPEEDL = 0, SPEEDR = 0;
 volatile float SPEEDAve = 0, SPEEDDif = 0;
 volatile float speedCommandCmS = 0.0f;
 volatile float turnCommandDiffCmS = 0.0f;
+volatile uint16_t motionCommandAgeMs = 0;
+volatile bool motionCommandWatchdogActive = false;
+volatile bool motionStopRequest = false;
 volatile bool gyroCalibrationRequest = false;
 volatile bool gyroCalibrationBusy = false;
 volatile uint8_t gyroCalibrationResult = 0;
@@ -124,7 +127,27 @@ void Parse_PID_Commands(void)
             command_id > 0U && command_id <= 65535U)
         {
             runFlag = (temp_int != 0) && !gyroCalibrationBusy;
+            if (!runFlag)
+            {
+                speedCommandCmS = 0.0f;
+                turnCommandDiffCmS = 0.0f;
+                motionCommandWatchdogActive = false;
+                motionCommandAgeMs = 0;
+                motionStopRequest = true;
+            }
             printf("A,R,%u,%d\r\n", command_id, runFlag ? 1 : 0);
+            match_success = true;
+        }
+        else if (sscanf(RxBuffer, "X,%u", &command_id) == 1 &&
+                 command_id > 0U && command_id <= 65535U)
+        {
+            /* 摇杆松手：立即清除行驶目标，但保持直立环运行。 */
+            speedCommandCmS = 0.0f;
+            turnCommandDiffCmS = 0.0f;
+            motionCommandWatchdogActive = false;
+            motionCommandAgeMs = 0;
+            motionStopRequest = true;
+            printf("A,X,%u\r\n", command_id);
             match_success = true;
         }
         else if (sscanf(RxBuffer, "C,%u", &command_id) == 1 &&
@@ -135,6 +158,9 @@ void Parse_PID_Commands(void)
                 runFlag = false;
                 speedCommandCmS = 0.0f;
                 turnCommandDiffCmS = 0.0f;
+                motionCommandWatchdogActive = false;
+                motionCommandAgeMs = 0;
+                motionStopRequest = true;
                 gyroCalibrationResult = 0;
                 gyroCalibrationCommandId = (uint16_t)command_id;
                 gyroCalibrationBusy = true;
@@ -163,6 +189,14 @@ void Parse_PID_Commands(void)
             if (sscanf(p_cmd, "runFlag:%d", &temp_int) == 1) {
                 /* Never energize the motors while gyro calibration is active. */
                 runFlag = (temp_int != 0) && !gyroCalibrationBusy;
+                if (!runFlag)
+                {
+                    speedCommandCmS = 0.0f;
+                    turnCommandDiffCmS = 0.0f;
+                    motionCommandWatchdogActive = false;
+                    motionCommandAgeMs = 0;
+                    motionStopRequest = true;
+                }
                 printf("ACK:RUN:%d\r\n", runFlag ? 1 : 0);
                 match_success = true;
             }
@@ -176,6 +210,9 @@ void Parse_PID_Commands(void)
                     runFlag = false;
                     speedCommandCmS = 0.0f;
                     turnCommandDiffCmS = 0.0f;
+                    motionCommandWatchdogActive = false;
+                    motionCommandAgeMs = 0;
+                    motionStopRequest = true;
                     gyroCalibrationResult = 0;
                     gyroCalibrationCommandId = 0;
                     gyroCalibrationBusy = true;
@@ -206,6 +243,18 @@ void Parse_PID_Commands(void)
 
                 turnCommandDiffCmS = temp_int * MAX_TURN_DIFF_CM_S /
                                      BLE_TURN_FULL_SCALE;
+
+                motionCommandAgeMs = 0;
+                if (fabsf(temp_val) < 0.01f && temp_int == 0)
+                {
+                    /* 兼容旧小程序：普通零指令同样立即停车。 */
+                    motionCommandWatchdogActive = false;
+                    motionStopRequest = true;
+                }
+                else
+                {
+                    motionCommandWatchdogActive = true;
+                }
                 match_success = true;
             } 
         }

@@ -3,7 +3,7 @@
 <title>Static Call Graph - [.\fly.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image .\fly.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5040049: Last Updated: Thu Aug 13 00:01:06 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5040049: Last Updated: Thu Aug 13 00:23:57 2026
 <BR><P>
 <H3>Maximum Stack Usage =        776 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -921,7 +921,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[93]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Motor_SetPWM
 </UL>
 
-<P><STRONG><a name="[9f]"></a>Parse_PID_Commands</STRONG> (Thumb, 866 bytes, Stack size 96 bytes, main.o(i.Parse_PID_Commands))
+<P><STRONG><a name="[9f]"></a>Parse_PID_Commands</STRONG> (Thumb, 1680 bytes, Stack size 96 bytes, main.o(i.Parse_PID_Commands))
 <BR><BR>[Stack]<UL><LI>Max Depth = 360<LI>Call Chain = Parse_PID_Commands &rArr; __0sscanf &rArr; __vfscanf_char &rArr; __vfscanf &rArr; _scanf_real
 </UL>
 <BR>[Calls]<UL><LI><a href="#[57]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_i2f
@@ -1022,7 +1022,7 @@ Global Symbols
 <P><STRONG><a name="[6]"></a>SVC_Handler</STRONG> (Thumb, 2 bytes, Stack size 0 bytes, stm32f10x_it.o(i.SVC_Handler))
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f103xb.o(RESET)
 </UL>
-<P><STRONG><a name="[9]"></a>SysTick_Handler</STRONG> (Thumb, 90 bytes, Stack size 0 bytes, stm32f10x_it.o(i.SysTick_Handler))
+<P><STRONG><a name="[9]"></a>SysTick_Handler</STRONG> (Thumb, 148 bytes, Stack size 0 bytes, stm32f10x_it.o(i.SysTick_Handler))
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f103xb.o(RESET)
 </UL>
 <P><STRONG><a name="[a7]"></a>SystemClock_Config</STRONG> (Thumb, 106 bytes, Stack size 8 bytes, main.o(i.SystemClock_Config))
@@ -1066,7 +1066,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[35]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
 </UL>
 
-<P><STRONG><a name="[23]"></a>TIM1_UP_IRQHandler</STRONG> (Thumb, 2452 bytes, Stack size 56 bytes, stm32f10x_it.o(i.TIM1_UP_IRQHandler))
+<P><STRONG><a name="[23]"></a>TIM1_UP_IRQHandler</STRONG> (Thumb, 2490 bytes, Stack size 56 bytes, stm32f10x_it.o(i.TIM1_UP_IRQHandler))
 <BR><BR>[Stack]<UL><LI>Max Depth = 136<LI>Call Chain = TIM1_UP_IRQHandler &rArr; MPU6050ReadGyro &rArr; MPU6050_ReadData &rArr; I2C_BufferRead &rArr; WaitEvent &rArr; I2C_CheckEvent
 </UL>
 <BR>[Calls]<UL><LI><a href="#[4d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_fsub

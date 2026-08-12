@@ -108,6 +108,10 @@ Page({
   _gyroCommandId: 0,
   _gyroCommandAttempts: 0,
 
+  _motionStopAckTimer: 0 as any,
+  _motionStopId: 0,
+  _motionStopAttempts: 0,
+
   onReady() {
     this.initJoystick();
     this.initPlotCanvasSize();
@@ -121,6 +125,7 @@ Page({
   // 触摸开始：立刻启动循环发送定时器
   onTouchStart() {
     if (this.data.gyroCalibrating) return;
+    this._cancelMotionStopCommand();
     this.startSendTimer();
   },
 
@@ -209,22 +214,9 @@ Page({
 
     if (this.data.gyroCalibrating) return;
 
-    // 3. 连续发送三次归零码文本，每次间隔 50ms 防止蓝牙底层丢包或粘包
-    let sendCount = 0;
-    const sendZeroInterval = () => {
-      if (sendCount < 3) {
-        this.sendToCar(0, 0);
-        sendCount++;
-        
-        // 如果还没发满3次，隔 50ms 后再次触发自身
-        if (sendCount < 3) {
-          setTimeout(sendZeroInterval, 50);
-        }
-      }
-    };
-    
-    // 立即启动第一次发送
-    sendZeroInterval();
+    // 清除尚未发出的旧摇杆帧，改发带 ACK 的高优先级停车命令。
+    this._pendingMotionWrite = null;
+    this._sendMotionStopCommand();
   },
 
   // 启动循环发送定时器
@@ -342,6 +334,86 @@ Page({
   _nextCommandId() {
     this._commandSequence = (this._commandSequence % 65535) + 1;
     return this._commandSequence;
+  },
+
+  _clearMotionStopAckTimer() {
+    if (this._motionStopAckTimer) {
+      clearTimeout(this._motionStopAckTimer);
+      this._motionStopAckTimer = 0;
+    }
+  },
+
+  _removeQueuedMotionStop(commandId: number) {
+    const commandText = `X,${commandId}\n`;
+    this._controlWriteQueue = this._controlWriteQueue.filter(
+      (item) => item.text !== commandText
+    );
+  },
+
+  _cancelMotionStopCommand() {
+    if (this._motionStopId !== 0) {
+      this._removeQueuedMotionStop(this._motionStopId);
+    }
+    this._clearMotionStopAckTimer();
+    this._motionStopId = 0;
+    this._motionStopAttempts = 0;
+  },
+
+  _attemptMotionStopCommand() {
+    if (this._motionStopId === 0 || !this.data.connected) return;
+
+    if (this._motionStopAttempts >= 3) {
+      // 兼容尚未升级的旧固件；新固件还有 500ms 遥控看门狗兜底。
+      this.sendString('s:0,t:0\r\n', undefined, undefined, true);
+      this._cancelMotionStopCommand();
+      return;
+    }
+
+    this._motionStopAttempts += 1;
+    this._clearMotionStopAckTimer();
+    const commandId = this._motionStopId;
+
+    this.sendString(
+      `X,${commandId}\n`,
+      () => {
+        if (this._motionStopId !== commandId) return;
+        this._motionStopAckTimer = setTimeout(() => {
+          this._motionStopAckTimer = 0;
+          this._attemptMotionStopCommand();
+        }, 500);
+      },
+      () => {
+        if (this._motionStopId !== commandId) return;
+        this._motionStopAckTimer = setTimeout(() => {
+          this._motionStopAckTimer = 0;
+          this._attemptMotionStopCommand();
+        }, 100);
+      },
+      true
+    );
+  },
+
+  _sendMotionStopCommand() {
+    if (!this.data.connected) return;
+
+    this._cancelMotionStopCommand();
+    this._motionStopId = this._nextCommandId();
+    this._motionStopAttempts = 0;
+    this._attemptMotionStopCommand();
+  },
+
+  _handleMotionStopAckLine(text: string) {
+    const ack = text.match(/^A,X,(\d+)$/i);
+    if (!ack) return false;
+
+    const commandId = Number(ack[1]);
+    if (commandId === this._motionStopId) {
+      this._removeQueuedMotionStop(commandId);
+      this._clearMotionStopAckTimer();
+      this._motionStopId = 0;
+      this._motionStopAttempts = 0;
+    }
+    return true;
   },
 
   _clearRunAckTimer() {
@@ -1081,6 +1153,7 @@ Page({
         if (text.length === 0) continue;
 
         if (
+          this._handleMotionStopAckLine(text) ||
           this._handleRunAckLine(text) ||
           this._handleGyroCalibrationLine(text)
         ) {
@@ -1227,6 +1300,7 @@ Page({
 
   closeBLE() {
     this.stopSendTimer();
+    this._cancelMotionStopCommand();
     this._clearRunAckTimer();
     this._clearGyroCalibrationTimer();
     this._clearGyroCommandAckTimer();
@@ -1248,6 +1322,8 @@ Page({
     this._runCommandOnFailed = null;
     this._gyroCommandId = 0;
     this._gyroCommandAttempts = 0;
+    this._motionStopId = 0;
+    this._motionStopAttempts = 0;
 
     try {
       if (this._bleValueChangeHandler) {

@@ -217,6 +217,21 @@ void SysTick_Handler(void)
 					swTimers[i].flag    = 1;
 			}
 	}
+
+    /* 遥控数据中断时自动清零，防止小车永久保持最后一次非零命令。 */
+    if (motionCommandWatchdogActive)
+    {
+        if (motionCommandAgeMs < MOTION_COMMAND_TIMEOUT_MS)
+            motionCommandAgeMs++;
+
+        if (motionCommandAgeMs >= MOTION_COMMAND_TIMEOUT_MS)
+        {
+            speedCommandCmS = 0.0f;
+            turnCommandDiffCmS = 0.0f;
+            motionStopRequest = true;
+            motionCommandWatchdogActive = false;
+        }
+    }
 	
 }
 
@@ -448,6 +463,21 @@ void TIM1_UP_IRQHandler(void)
                               (SPEEDAve - speedAveFiltered);
 
           SPEEDDif = SPEEDL - SPEEDR;
+
+          if (motionStopRequest)
+          {
+              /* 绕过行驶斜坡，立即撤销旧目标，再由速度环制动到静止。 */
+              motionStopRequest = false;
+              speedCommandCmS = 0.0f;
+              turnCommandDiffCmS = 0.0f;
+              SpeedPID.Target = 0.0f;
+              SpeedPID.ErrorInt = 0.0f;
+              turnTargetFiltered = 0.0f;
+              TurnPID.Target = 0.0f;
+              TurnPID.ErrorInt = 0.0f;
+              speedAngleOffset = 0.0f;
+          }
+
           if (runFlag)
           {
               float targetStep;

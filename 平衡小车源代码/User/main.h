@@ -38,9 +38,13 @@ void Parse_PID_Commands(void);
 #define DRIVE_START_PWM              12
 #define DRIVE_START_SPEED_CM_S       1.0f
 #define DRIVE_START_ANGLE_ERR_DEG    0.4f
+#define MOTION_COMMAND_TIMEOUT_MS     500U
 
 extern volatile float speedCommandCmS;
 extern volatile float turnCommandDiffCmS;
+extern volatile uint16_t motionCommandAgeMs;
+extern volatile bool motionCommandWatchdogActive;
+extern volatile bool motionStopRequest;
 extern volatile bool speedEmergencyBrake;
 extern volatile bool gyroCalibrationRequest;
 extern volatile bool gyroCalibrationBusy;
