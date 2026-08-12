@@ -15,6 +15,12 @@ interface PlotSample {
   angle: number;
 }
 
+interface BleWriteItem {
+  text: string;
+  onSuccess?: () => void;
+  onFail?: () => void;
+}
+
 Page({
   data: {
     stickX: 0,
@@ -31,6 +37,7 @@ Page({
     isReceiving: true,
 
     runFlag: 0,
+    runCommandPending: false,
     gyroCalibrating: false,
     gyroCalibrationStatus: '未标定（断电后需重新标定）',
     angleAccOffset: 0,
@@ -81,6 +88,25 @@ Page({
   _plotDrawTimer: 0 as any,
   _plotMaxPoints: 100,
   _gyroCalibrationTimer: 0 as any,
+  _gyroCommandAckTimer: 0 as any,
+
+  _controlWriteQueue: [] as BleWriteItem[],
+  _normalWriteQueue: [] as BleWriteItem[],
+  _pendingMotionWrite: null as BleWriteItem | null,
+  _bleWriteBusy: false,
+  _bleWriteTimeout: 0 as any,
+  _bleWriteGeneration: 0,
+
+  _commandSequence: 0,
+  _runAckTimer: 0 as any,
+  _runCommandId: 0,
+  _runCommandTarget: -1,
+  _runCommandAttempts: 0,
+  _runCommandOnConfirmed: null as (() => void) | null,
+  _runCommandOnFailed: null as (() => void) | null,
+
+  _gyroCommandId: 0,
+  _gyroCommandAttempts: 0,
 
   onReady() {
     this.initJoystick();
@@ -225,15 +251,32 @@ Page({
 
     // 格式如 s:50,t:60\r\n  最长只有 14 字节，确保永不分包丢包
     const cmd = `s:${speed},t:${turn}\r\n`;
-    this.sendString(cmd);
+    // 摇杆帧只保留最新值，避免 BLE 短时拥塞后继续执行过期动作。
+    this._pendingMotionWrite = { text: cmd };
+    this._drainBleWriteQueue();
   },
 
-  sendString(str: string, onSuccess?: () => void, onFail?: () => void) {
+  sendString(
+    str: string,
+    onSuccess?: () => void,
+    onFail?: () => void,
+    highPriority = false
+  ) {
     if (!this.data.connected) {
       if (onFail) onFail();
       return;
     }
 
+    const item: BleWriteItem = { text: str, onSuccess, onFail };
+    if (highPriority) {
+      this._controlWriteQueue.push(item);
+    } else {
+      this._normalWriteQueue.push(item);
+    }
+    this._drainBleWriteQueue();
+  },
+
+  _stringToBuffer(str: string) {
     const buffer = new ArrayBuffer(str.length);
     const dataView = new DataView(buffer);
 
@@ -241,18 +284,195 @@ Page({
       dataView.setUint8(i, str.charCodeAt(i));
     }
 
+    return buffer;
+  },
+
+  _drainBleWriteQueue() {
+    if (this._bleWriteBusy || !this.data.connected) return;
+
+    const item = this._controlWriteQueue.shift() ||
+      this._pendingMotionWrite ||
+      this._normalWriteQueue.shift();
+
+    if (!item) return;
+
+    if (item === this._pendingMotionWrite) {
+      this._pendingMotionWrite = null;
+    }
+
+    this._bleWriteBusy = true;
+    const generation = this._bleWriteGeneration;
+    let settled = false;
+
+    const finish = (success: boolean) => {
+      if (settled) return;
+      settled = true;
+
+      // 连接已经关闭或重建时，忽略上一条连接迟到的回调。
+      if (generation !== this._bleWriteGeneration) return;
+
+      if (this._bleWriteTimeout) {
+        clearTimeout(this._bleWriteTimeout);
+        this._bleWriteTimeout = 0;
+      }
+
+      this._bleWriteBusy = false;
+      if (success) {
+        if (item.onSuccess) item.onSuccess();
+      } else if (item.onFail) {
+        item.onFail();
+      }
+
+      this._drainBleWriteQueue();
+    };
+
+    // 防止极少数情况下微信 BLE API 不回调，导致整个发送队列永久卡死。
+    this._bleWriteTimeout = setTimeout(() => finish(false), 1200);
+
     wx.writeBLECharacteristicValue({
       deviceId: this._deviceId,
       serviceId: this._serviceId,
       characteristicId: this._characteristicId,
-      value: buffer,
-      success: () => {
-        if (onSuccess) onSuccess();
-      },
-      fail: () => {
-        if (onFail) onFail();
-      }
+      value: this._stringToBuffer(item.text),
+      success: () => finish(true),
+      fail: () => finish(false)
     });
+  },
+
+  _nextCommandId() {
+    this._commandSequence = (this._commandSequence % 65535) + 1;
+    return this._commandSequence;
+  },
+
+  _clearRunAckTimer() {
+    if (this._runAckTimer) {
+      clearTimeout(this._runAckTimer);
+      this._runAckTimer = 0;
+    }
+  },
+
+  _resetRunCommandState() {
+    this._clearRunAckTimer();
+    this._runCommandId = 0;
+    this._runCommandTarget = -1;
+    this._runCommandAttempts = 0;
+    this._runCommandOnConfirmed = null;
+    this._runCommandOnFailed = null;
+    this.setData({ runCommandPending: false });
+  },
+
+  _failRunCommand(message: string) {
+    const onFailed = this._runCommandOnFailed;
+    const failedTarget = this._runCommandTarget;
+    const commandText = `R,${this._runCommandId},${this._runCommandTarget}\n`;
+    this._controlWriteQueue = this._controlWriteQueue.filter(
+      (item) => item.text !== commandText
+    );
+    this._resetRunCommandState();
+
+    // 启动命令没有收到确认时按安全侧处理，再补发一次停车命令。
+    if (failedTarget === 1 && this.data.connected) {
+      const stopId = this._nextCommandId();
+      this.sendString(`R,${stopId},0\n`, undefined, undefined, true);
+      this.setData({ runFlag: 0 });
+    }
+
+    if (onFailed) {
+      onFailed();
+    } else {
+      wx.showToast({ title: message, icon: 'none' });
+    }
+  },
+
+  _attemptRunCommand() {
+    if (this._runCommandId === 0) return;
+
+    if (!this.data.connected) {
+      this._failRunCommand('蓝牙连接已断开');
+      return;
+    }
+
+    if (this._runCommandAttempts >= 3) {
+      this._failRunCommand('小车未确认运行命令');
+      return;
+    }
+
+    this._runCommandAttempts += 1;
+    this._clearRunAckTimer();
+    const commandId = this._runCommandId;
+    this.sendString(
+      `R,${commandId},${this._runCommandTarget}\n`,
+      () => {
+        if (this._runCommandId !== commandId) return;
+        this._runAckTimer = setTimeout(() => {
+          this._runAckTimer = 0;
+          this._attemptRunCommand();
+        }, 700);
+      },
+      () => {
+        if (this._runCommandId !== commandId) return;
+        this._runAckTimer = setTimeout(() => {
+          this._runAckTimer = 0;
+          this._attemptRunCommand();
+        }, 100);
+      },
+      true
+    );
+  },
+
+  _sendRunCommand(
+    target: number,
+    onConfirmed?: () => void,
+    onFailed?: () => void
+  ) {
+    if (this.data.runCommandPending || !this.data.connected) {
+      if (onFailed) onFailed();
+      return;
+    }
+
+    this._runCommandId = this._nextCommandId();
+    this._runCommandTarget = target ? 1 : 0;
+    this._runCommandAttempts = 0;
+    this._runCommandOnConfirmed = onConfirmed || null;
+    this._runCommandOnFailed = onFailed || null;
+    this.setData({ runCommandPending: true });
+    this._attemptRunCommand();
+  },
+
+  _handleRunAckLine(text: string) {
+    const compact = text.match(/^A,R,(\d+),([01])$/i);
+    const legacy = text.match(/^ACK:RUN:([01])$/i);
+    if (!compact && !legacy) return false;
+
+    if (this._runCommandId === 0) return true;
+
+    if (compact && Number(compact[1]) !== this._runCommandId) {
+      return true;
+    }
+
+    const actual = Number(compact ? compact[2] : legacy![1]);
+    const expected = this._runCommandTarget;
+    const commandText = `R,${this._runCommandId},${expected}\n`;
+    const onConfirmed = this._runCommandOnConfirmed;
+    const onFailed = this._runCommandOnFailed;
+
+    this._controlWriteQueue = this._controlWriteQueue.filter(
+      (item) => item.text !== commandText
+    );
+    this._resetRunCommandState();
+    this.setData({ runFlag: actual });
+
+    if (actual === expected) {
+      if (onConfirmed) onConfirmed();
+    } else if (onFailed) {
+      onFailed();
+    } else {
+      wx.showToast({
+        title: expected ? '标定中，无法启动' : '停止命令未生效',
+        icon: 'none'
+      });
+    }
+    return true;
   },
   copyReceivedLogs() {
     const logs = this.data.receivedMsgs;
@@ -298,9 +518,21 @@ Page({
       return;
     }
 
+    if (!this.data.connected || this.data.runCommandPending) return;
+
     const next = this.data.runFlag ? 0 : 1;
-    this.setData({ runFlag: next });
-    this.sendString(`runFlag:${next}\r\n`);
+    if (!next) {
+      this.stopSendTimer();
+      this._pendingMotionWrite = null;
+      this.setData({ stickX: 0, stickY: 0, speed: 0, turn: 0 });
+    }
+
+    this._sendRunCommand(next, () => {
+      wx.showToast({
+        title: next ? '小车已开始运行' : '小车已停止',
+        icon: 'none'
+      });
+    });
   },
 
   _clearGyroCalibrationTimer() {
@@ -310,13 +542,103 @@ Page({
     }
   },
 
+  _clearGyroCommandAckTimer() {
+    if (this._gyroCommandAckTimer) {
+      clearTimeout(this._gyroCommandAckTimer);
+      this._gyroCommandAckTimer = 0;
+    }
+  },
+
+  _failGyroCalibrationCommand(status: string, toast: string) {
+    const commandText = `C,${this._gyroCommandId}\n`;
+    this._controlWriteQueue = this._controlWriteQueue.filter(
+      (item) => item.text !== commandText
+    );
+    this._clearGyroCommandAckTimer();
+    this._clearGyroCalibrationTimer();
+    this._gyroCommandId = 0;
+    this._gyroCommandAttempts = 0;
+    this.setData({
+      gyroCalibrating: false,
+      gyroCalibrationStatus: status
+    });
+    wx.showToast({ title: toast, icon: 'none' });
+  },
+
+  _attemptGyroCalibrationCommand() {
+    if (this._gyroCommandId === 0) return;
+
+    if (!this.data.connected) {
+      this._failGyroCalibrationCommand('连接已断开，标定取消', '连接已断开');
+      return;
+    }
+
+    if (this._gyroCommandAttempts >= 3) {
+      this._failGyroCalibrationCommand(
+        '标定命令无响应，请保持静止后重试',
+        '标定命令无响应'
+      );
+      return;
+    }
+
+    this._gyroCommandAttempts += 1;
+    this._clearGyroCommandAckTimer();
+    const commandId = this._gyroCommandId;
+    this.sendString(
+      `C,${commandId}\n`,
+      () => {
+        if (this._gyroCommandId !== commandId) return;
+        this._gyroCommandAckTimer = setTimeout(() => {
+          this._gyroCommandAckTimer = 0;
+          this._attemptGyroCalibrationCommand();
+        }, 1200);
+      },
+      () => {
+        if (this._gyroCommandId !== commandId) return;
+        this._gyroCommandAckTimer = setTimeout(() => {
+          this._gyroCommandAckTimer = 0;
+          this._attemptGyroCalibrationCommand();
+        }, 100);
+      },
+      true
+    );
+  },
+
+  _acceptGyroCalibrationCommand(isBusy: boolean) {
+    const commandText = `C,${this._gyroCommandId}\n`;
+    this._controlWriteQueue = this._controlWriteQueue.filter(
+      (item) => item.text !== commandText
+    );
+    this._clearGyroCommandAckTimer();
+    this._clearGyroCalibrationTimer();
+    this.setData({
+      gyroCalibrating: true,
+      gyroCalibrationStatus: isBusy
+        ? '设备正在标定，请继续保持静止'
+        : '正在静置并采样，请勿移动小车'
+    });
+
+    this._gyroCalibrationTimer = setTimeout(() => {
+      this._gyroCalibrationTimer = 0;
+      this._failGyroCalibrationCommand(
+        '标定过程超时，请保持静止后重试',
+        '标定超时'
+      );
+    }, 10000);
+  },
+
   startGyroCalibration() {
-    if (!this.data.connected || this.data.gyroCalibrating) return;
+    if (
+      !this.data.connected ||
+      this.data.gyroCalibrating ||
+      this.data.runCommandPending
+    ) return;
 
     this.stopSendTimer();
     this._clearGyroCalibrationTimer();
+    this._clearGyroCommandAckTimer();
+    this._pendingMotionWrite = null;
     this.setData({
-      runFlag: 0,
       stickX: 0,
       stickY: 0,
       speed: 0,
@@ -326,8 +648,8 @@ Page({
       gyroCalibrationStatus: '正在停车，请固定小车'
     });
 
-    this.sendString(
-      'runFlag:0\r\n',
+    this._sendRunCommand(
+      0,
       () => {
         wx.showModal({
           title: '标定 gx 零飘',
@@ -351,36 +673,12 @@ Page({
             }
 
             this.setData({
-              gyroCalibrationStatus: '标定中，请勿移动小车'
+              gyroCalibrationStatus: '正在发送标定命令...'
             });
 
-            this._gyroCalibrationTimer = setTimeout(() => {
-              this._gyroCalibrationTimer = 0;
-              this.setData({
-                gyroCalibrating: false,
-                gyroCalibrationStatus: '标定超时，请保持静止后重试'
-              });
-              wx.showToast({
-                title: '标定超时',
-                icon: 'none'
-              });
-            }, 8000);
-
-            this.sendString(
-              'gyroCalibrate:1\r\n',
-              undefined,
-              () => {
-                this._clearGyroCalibrationTimer();
-                this.setData({
-                  gyroCalibrating: false,
-                  gyroCalibrationStatus: '标定命令发送失败，请重试'
-                });
-                wx.showToast({
-                  title: '发送失败',
-                  icon: 'none'
-                });
-              }
-            );
+            this._gyroCommandId = this._nextCommandId();
+            this._gyroCommandAttempts = 0;
+            this._attemptGyroCalibrationCommand();
           }
         });
       },
@@ -398,7 +696,43 @@ Page({
   },
 
   _handleGyroCalibrationLine(text: string) {
+    const compact = text.match(
+      /^A,C,(\d+),(S|B|D|F)(?:,([+-]?(?:\d+(?:\.\d*)?|\.\d+)|MOVED))?$/i
+    );
+    if (compact) {
+      const commandId = Number(compact[1]);
+      if (commandId !== this._gyroCommandId) return true;
+
+      const state = compact[2].toUpperCase();
+      if (state === 'S' || state === 'B') {
+        this._acceptGyroCalibrationCommand(state === 'B');
+        return true;
+      }
+
+      this._clearGyroCommandAckTimer();
+      this._clearGyroCalibrationTimer();
+      this._gyroCommandId = 0;
+      this._gyroCommandAttempts = 0;
+
+      if (state === 'D') {
+        const offset = Number(compact[3]);
+        this.setData({
+          gyroCalibrating: false,
+          gyroCalibrationStatus: `标定完成，gx 零偏 ${offset.toFixed(2)}`
+        });
+        wx.showToast({ title: '标定完成', icon: 'success' });
+      } else {
+        this.setData({
+          gyroCalibrating: false,
+          gyroCalibrationStatus: '标定失败：检测到移动，请重试'
+        });
+        wx.showToast({ title: '小车发生移动', icon: 'none' });
+      }
+      return true;
+    }
+
     if (/^GYRO_CAL:START$/i.test(text)) {
+      this._acceptGyroCalibrationCommand(false);
       this.setData({
         gyroCalibrating: true,
         gyroCalibrationStatus: '正在静置并采样，请勿移动小车'
@@ -407,6 +741,7 @@ Page({
     }
 
     if (/^GYRO_CAL:BUSY$/i.test(text)) {
+      this._acceptGyroCalibrationCommand(true);
       this.setData({
         gyroCalibrating: true,
         gyroCalibrationStatus: '设备正在标定，请继续保持静止'
@@ -418,7 +753,10 @@ Page({
       /^GYRO_CAL:DONE,offset:([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/i
     );
     if (done) {
+      this._clearGyroCommandAckTimer();
       this._clearGyroCalibrationTimer();
+      this._gyroCommandId = 0;
+      this._gyroCommandAttempts = 0;
       const offset = Number(done[1]);
       this.setData({
         gyroCalibrating: false,
@@ -432,7 +770,10 @@ Page({
     }
 
     if (/^GYRO_CAL:FAIL,MOVED$/i.test(text)) {
+      this._clearGyroCommandAckTimer();
       this._clearGyroCalibrationTimer();
+      this._gyroCommandId = 0;
+      this._gyroCommandAttempts = 0;
       this.setData({
         gyroCalibrating: false,
         gyroCalibrationStatus: '标定失败：检测到移动，请重试'
@@ -739,7 +1080,10 @@ Page({
         const text = part.trim();
         if (text.length === 0) continue;
 
-        if (this._handleGyroCalibrationLine(text)) {
+        if (
+          this._handleRunAckLine(text) ||
+          this._handleGyroCalibrationLine(text)
+        ) {
           this._enqueueLog(text, timeStr);
           continue;
         }
@@ -883,7 +1227,27 @@ Page({
 
   closeBLE() {
     this.stopSendTimer();
+    this._clearRunAckTimer();
     this._clearGyroCalibrationTimer();
+    this._clearGyroCommandAckTimer();
+
+    if (this._bleWriteTimeout) {
+      clearTimeout(this._bleWriteTimeout);
+      this._bleWriteTimeout = 0;
+    }
+
+    this._controlWriteQueue = [];
+    this._normalWriteQueue = [];
+    this._pendingMotionWrite = null;
+    this._bleWriteBusy = false;
+    this._bleWriteGeneration += 1;
+    this._runCommandId = 0;
+    this._runCommandTarget = -1;
+    this._runCommandAttempts = 0;
+    this._runCommandOnConfirmed = null;
+    this._runCommandOnFailed = null;
+    this._gyroCommandId = 0;
+    this._gyroCommandAttempts = 0;
 
     try {
       if (this._bleValueChangeHandler) {
@@ -915,6 +1279,7 @@ Page({
       connected: false,
       statusMsg: '蓝牙未连接',
       runFlag: 0,
+      runCommandPending: false,
       stickX: 0,
       stickY: 0,
       speed: 0,

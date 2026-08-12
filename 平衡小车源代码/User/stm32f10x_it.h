@@ -55,9 +55,11 @@ typedef struct {
 } SwTimer_t;
 extern volatile SwTimer_t swTimers[NUM_TIMERS];
 
-extern char RxBuffer[64];
-extern uint8_t RxCounter;
-extern uint8_t RxFlag;
+#define USART1_RX_RING_SIZE 256U
+#define USART1_RX_LINE_SIZE 64U
+
+extern volatile uint32_t usart1RxOverflowCount;
+extern uint8_t USART1_ReadLine(char *line, uint16_t lineSize);
 extern void Interrupt_Priority_Config(void);
 extern float sensorAngleOffset;//安装误差校准
 extern volatile float speedAngleOffset;

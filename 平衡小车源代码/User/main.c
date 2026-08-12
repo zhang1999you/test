@@ -53,6 +53,7 @@ volatile bool gyroCalibrationBusy = false;
 volatile uint8_t gyroCalibrationResult = 0;
 volatile float gyroXOffset = 0.0f;
 volatile bool runFlag = false;
+static uint16_t gyroCalibrationCommandId = 0;
 float angleAccOffset = 0.0f;
 
 
@@ -107,15 +108,46 @@ PID_t TurnPID={
 
 void Parse_PID_Commands(void)
 {
-    if (RxFlag == 1)
+    char RxBuffer[USART1_RX_LINE_SIZE];
+
+    /* 一次处理当前已收到的所有完整命令，避免 BLE 连续发包时积压。 */
+    while (USART1_ReadLine(RxBuffer, sizeof(RxBuffer)))
     {
         float temp_val = 0;
         int temp_int = 0;
+        unsigned int command_id = 0;
         bool match_success = false; 
         char *p_cmd = NULL; // 用于指向真正有效命令起始位置的指针
 
-        // ? 核心改动：不再死板地从头匹配，而是在整个缓冲区里“搜寻”关键字（解决黏连问题）
-        if ((p_cmd = strstr(RxBuffer, "SpeedPID.kp:")) != NULL)      { if(sscanf(p_cmd, "SpeedPID.kp:%f", &temp_val) == 1) {SpeedPID.Kp = temp_val; match_success = true;} }
+        /* 与小程序配套的带序号短协议；旧协议继续保留兼容。 */
+        if (sscanf(RxBuffer, "R,%u,%d", &command_id, &temp_int) == 2 &&
+            command_id > 0U && command_id <= 65535U)
+        {
+            runFlag = (temp_int != 0) && !gyroCalibrationBusy;
+            printf("A,R,%u,%d\r\n", command_id, runFlag ? 1 : 0);
+            match_success = true;
+        }
+        else if (sscanf(RxBuffer, "C,%u", &command_id) == 1 &&
+                 command_id > 0U && command_id <= 65535U)
+        {
+            if (!gyroCalibrationBusy)
+            {
+                runFlag = false;
+                speedCommandCmS = 0.0f;
+                turnCommandDiffCmS = 0.0f;
+                gyroCalibrationResult = 0;
+                gyroCalibrationCommandId = (uint16_t)command_id;
+                gyroCalibrationBusy = true;
+                gyroCalibrationRequest = true;
+                printf("A,C,%u,S\r\n", command_id);
+            }
+            else
+            {
+                printf("A,C,%u,B\r\n", command_id);
+            }
+            match_success = true;
+        }
+        else if ((p_cmd = strstr(RxBuffer, "SpeedPID.kp:")) != NULL)      { if(sscanf(p_cmd, "SpeedPID.kp:%f", &temp_val) == 1) {SpeedPID.Kp = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "SpeedPID.ki:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.ki:%f", &temp_val) == 1) {SpeedPID.Ki = temp_val; match_success = true;} }
         else if ((p_cmd = strstr(RxBuffer, "SpeedPID.kd:")) != NULL) { if(sscanf(p_cmd, "SpeedPID.kd:%f", &temp_val) == 1) {SpeedPID.Kd = temp_val; match_success = true;} }
         
@@ -131,6 +163,7 @@ void Parse_PID_Commands(void)
             if (sscanf(p_cmd, "runFlag:%d", &temp_int) == 1) {
                 /* Never energize the motors while gyro calibration is active. */
                 runFlag = (temp_int != 0) && !gyroCalibrationBusy;
+                printf("ACK:RUN:%d\r\n", runFlag ? 1 : 0);
                 match_success = true;
             }
         }
@@ -144,6 +177,7 @@ void Parse_PID_Commands(void)
                     speedCommandCmS = 0.0f;
                     turnCommandDiffCmS = 0.0f;
                     gyroCalibrationResult = 0;
+                    gyroCalibrationCommandId = 0;
                     gyroCalibrationBusy = true;
                     gyroCalibrationRequest = true;
                     printf("GYRO_CAL:START\r\n");
@@ -180,11 +214,6 @@ void Parse_PID_Commands(void)
             // printf("ERR: Command Unrecognized! Received: [%s]\r\n", RxBuffer);
         }
 
-        // ? 每次处理完后，不管成功还是失败，把接收缓冲区彻底清零，并复位计数器
-        memset(RxBuffer, 0, sizeof(RxBuffer)); 
-        RxCounter = 0;
-        RxFlag = 0;
-        
         // if(match_success) {
         //     printf("ACK: Parameter Updated\r\n"); 
         // }
@@ -369,15 +398,21 @@ int main(void)
         {
             uint8_t calibrationResult;
             float calibrationOffset;
+            uint16_t calibrationCommandId;
 
             __disable_irq();
             calibrationResult = gyroCalibrationResult;
             calibrationOffset = gyroXOffset;
+            calibrationCommandId = gyroCalibrationCommandId;
             gyroCalibrationResult = 0;
             __enable_irq();
 
-            if (calibrationResult == 1)
+            if (calibrationResult == 1 && calibrationCommandId != 0U)
+                printf("A,C,%u,D,%.2f\r\n", calibrationCommandId, calibrationOffset);
+            else if (calibrationResult == 1)
                 printf("GYRO_CAL:DONE,offset:%.2f\r\n", calibrationOffset);
+            else if (calibrationCommandId != 0U)
+                printf("A,C,%u,F,MOVED\r\n", calibrationCommandId);
             else
                 printf("GYRO_CAL:FAIL,MOVED\r\n");
         }
@@ -385,7 +420,7 @@ int main(void)
 		{
 			swTimers[1].flag = 0;
             bool debugStd=1;
-            if(debugStd)
+            if(debugStd && !gyroCalibrationBusy)
             {
                 __disable_irq();   // 只在复制变量时短暂关闭中断
                 vl      = SPEEDL;

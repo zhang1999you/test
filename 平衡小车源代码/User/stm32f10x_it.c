@@ -32,6 +32,7 @@
 #include <math.h>
 #include "motor/Encoder.h"
 #include "motor/Motor.h"
+#include <string.h>
 /**
  * @brief  配置平衡小车全系统的中断优先级
  * @note   基于 NVIC 优先级分组 2（2位抢占，2位响应）
@@ -89,7 +90,7 @@ void Interrupt_Priority_Config(void)
 /* 定义定时器：一个 5ms、一个 50ms */
 volatile SwTimer_t swTimers[NUM_TIMERS] = {
     { 10, 0, 0 },   //10ms 定时器
-		{ 100, 0, 0 }, //打印速度
+		{ 300, 0, 0 }, //降低调试输出占用，给控制命令和 ACK 留出带宽
     { 50, 0, 0 },   //角度环
     { 50, 0, 0 },   //速度环 转向环
 };
@@ -624,41 +625,91 @@ void TIM1_UP_IRQHandler(void)
     }
 }
 
+/** USART1 接收环形缓冲区：中断只收字节，主循环负责按行解析。 */
+static uint8_t usart1RxRing[USART1_RX_RING_SIZE];
+static volatile uint16_t usart1RxHead = 0;
+static volatile uint16_t usart1RxTail = 0;
+volatile uint32_t usart1RxOverflowCount = 0;
+
+uint8_t USART1_ReadLine(char *line, uint16_t lineSize)
+{
+    static char pendingLine[USART1_RX_LINE_SIZE];
+    static uint16_t pendingLength = 0;
+    static uint8_t discardingLongLine = 0;
+
+    if (line == NULL || lineSize < 2U)
+        return 0;
+
+    while (usart1RxTail != usart1RxHead)
+    {
+        uint8_t data = usart1RxRing[usart1RxTail];
+        usart1RxTail = (uint16_t)((usart1RxTail + 1U) &
+                                  (USART1_RX_RING_SIZE - 1U));
+
+        if (data == '\r' || data == '\n')
+        {
+            if (discardingLongLine)
+            {
+                discardingLongLine = 0;
+                pendingLength = 0;
+                continue;
+            }
+
+            if (pendingLength > 0U)
+            {
+                uint16_t copyLength = pendingLength;
+                if (copyLength >= lineSize)
+                    copyLength = lineSize - 1U;
+
+                memcpy(line, pendingLine, copyLength);
+                line[copyLength] = '\0';
+                pendingLength = 0;
+                return 1;
+            }
+        }
+        else if (!discardingLongLine)
+        {
+            if (pendingLength < (USART1_RX_LINE_SIZE - 1U))
+            {
+                pendingLine[pendingLength++] = (char)data;
+            }
+            else
+            {
+                /* 丢弃整条超长命令，避免后半段被误识别为新命令。 */
+                pendingLength = 0;
+                discardingLongLine = 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 /**
   * @brief  USART1 中断服务函数 (处理 DEBUG_USART 数据)
   */
-char RxBuffer[64];      // 实际的内存分配
-uint8_t RxCounter = 0;
-uint8_t RxFlag = 0;
 void USART1_IRQHandler(void)
 {
     if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
     {
-        uint8_t res = USART_ReceiveData(USART1);
-        
-        // 如果没有接收完成
-        if (RxFlag == 0)
+        uint8_t data = (uint8_t)USART_ReceiveData(USART1);
+        uint16_t nextHead = (uint16_t)((usart1RxHead + 1U) &
+                                       (USART1_RX_RING_SIZE - 1U));
+
+        if (nextHead != usart1RxTail)
         {
-            // 收到换行符认为一条命令结束
-            if (res == '\n' || res == '\r')
-            {
-                if (RxCounter > 0) 
-                {
-                    RxBuffer[RxCounter] = '\0'; // 添加字符串结束符
-                    RxFlag = 1;                 // 标记可以解析了
-                }
-            }
-            else
-            {
-                RxBuffer[RxCounter++] = res;
-                if (RxCounter >= 64) RxCounter = 0; // 防止溢出
-            }
+            usart1RxRing[usart1RxHead] = data;
+            usart1RxHead = nextHead;
         }
-        USART_ClearITPendingBit(USART1, USART_IT_RXNE);
+        else
+        {
+            usart1RxOverflowCount++;
+        }
     }
-    if(USART_GetFlagStatus(USART1, USART_FLAG_ORE) != RESET)
+    else if (USART_GetFlagStatus(USART1, USART_FLAG_ORE) != RESET)
     {
-        USART_ReceiveData(USART1); // 哪怕读出的是垃圾数据，也必须读一下来清除硬件锁死
+        (void)USART_ReceiveData(USART1); // 读取 DR 清除 ORE，防止硬件锁死
+        usart1RxOverflowCount++;
     }
 }
 

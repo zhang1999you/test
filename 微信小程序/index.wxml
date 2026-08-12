@@ -165,9 +165,10 @@
         <button
           class="run-btn {{runFlag ? 'on' : 'off'}}"
           bindtap="toggleRunFlag"
-          disabled="{{gyroCalibrating}}"
+          disabled="{{gyroCalibrating || runCommandPending}}"
+          loading="{{runCommandPending}}"
         >
-          {{runFlag ? '停止运行' : '开始运行'}}
+          {{runCommandPending ? '等待小车确认' : (runFlag ? '停止运行' : '开始运行')}}
         </button>
       </view>
 
@@ -175,7 +176,7 @@
         <button
           class="gyro-cal-btn"
           bindtap="startGyroCalibration"
-          disabled="{{gyroCalibrating}}"
+          disabled="{{gyroCalibrating || runCommandPending}}"
           loading="{{gyroCalibrating}}"
         >
           {{gyroCalibrating ? '标定中，请勿移动' : '标定 gx 零飘'}}
