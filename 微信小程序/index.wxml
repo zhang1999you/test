@@ -1,10 +1,5 @@
-<scroll-view
-  class="root-scroll"
-  scroll-y="{{connected}}"
-  enhanced
-  show-scrollbar="{{false}}"
->
-  <view class="container">
+<view class="root-page">
+  <view class="index-container">
     <view class="control-section">
 
       <view class="joystick-base" id="joy-base">
@@ -60,7 +55,8 @@
   </view>
 
   <canvas
-    canvas-id="plot-canvas"
+    id="plot-canvas"
+    type="2d"
     class="plot-canvas"
     width="{{plotCanvasW}}"
     height="{{plotCanvasH}}"
@@ -90,8 +86,8 @@
           class="receive-log-view"
           scroll-y
           scroll-x
-          scroll-with-animation="true"
-          scroll-into-view="{{scrollIntoViewId}}"
+          scroll-with-animation="{{false}}"
+          scroll-top="{{logScrollTop}}"
           enhanced
           show-scrollbar="{{true}}"
         >
@@ -250,4 +246,4 @@
     </view>
 
   </view>
-</scroll-view>
+</view>

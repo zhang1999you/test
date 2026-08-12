@@ -19,13 +19,17 @@
 }
 
 
-.root-scroll {
-  height: 100vh;
+.root-page {
+  min-height: 100vh;
+  overflow-x: hidden;
   background: #f6f6f8;
 }
 
-.container {
+.index-container {
   width: 100%;
+  min-height: 100vh;
+  padding-top: 52rpx;
+  box-sizing: border-box;
 }
 
 .control-section {
@@ -133,10 +137,12 @@
 }
 
 .plot-canvas {
+  display: block;
   width: 100%;
   height: 320rpx;
   background: #141414;
   border-radius: 12rpx;
+  overflow: hidden;
 }
 
 /* 接收区 */

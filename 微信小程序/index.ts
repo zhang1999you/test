@@ -61,6 +61,7 @@ Page({
     },
 
     scrollIntoViewId: '',
+    logScrollTop: 0,
 
     plotCanvasW: 0,
     plotCanvasH: 0,
@@ -82,11 +83,19 @@ Page({
   _rxBuffer: '',
   _pendingLogs: [] as MsgItem[],
   _flushTimer: 0 as any,
+  _logScrollTopValue: 0,
+  _logAutoScrollMinItems: 10,
   _bleValueChangeHandler: null as any,
+  _bluetoothDeviceFoundHandler: null as any,
+  _bluetoothAdapterOpen: false,
+  _bleClosing: false,
 
   _plotSamples: [] as PlotSample[],
   _plotDrawTimer: 0 as any,
   _plotMaxPoints: 100,
+  _plotCanvasNode: null as any,
+  _plotCanvasContext: null as any,
+  _plotCanvasDpr: 1,
   _gyroCalibrationTimer: 0 as any,
   _gyroCommandAckTimer: 0 as any,
 
@@ -162,9 +171,34 @@ Page({
         plotCanvasH: h
       },
       () => {
-        this.drawPlotChart();
+        wx.nextTick(() => this.initPlotCanvasNode());
       }
     );
+  },
+
+  initPlotCanvasNode() {
+    if (!this.data.connected) return;
+
+    wx.createSelectorQuery()
+      .select('#plot-canvas')
+      .fields({ node: true, size: true }, (res: any) => {
+        if (!res || !res.node || !res.width || !res.height) return;
+
+        const canvas = res.node;
+        const sys = wx.getSystemInfoSync();
+        const dpr = sys.pixelRatio || 1;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = Math.round(res.width * dpr);
+        canvas.height = Math.round(res.height * dpr);
+        ctx.scale(dpr, dpr);
+
+        this._plotCanvasNode = canvas;
+        this._plotCanvasContext = ctx;
+        this._plotCanvasDpr = dpr;
+        this.drawPlotChart();
+      })
+      .exec();
   },
 
   // 触摸移动：只负责高频计算并更新界面坐标及数据，发送动作交由定时器接管
@@ -926,12 +960,18 @@ Page({
         ? newLogs.slice(newLogs.length - 80)
         : newLogs;
 
-      const lastIndex = finalLogs.length - 1;
+      const updateData: Record<string, any> = {
+        receivedMsgs: finalLogs
+      };
 
-      this.setData({
-        receivedMsgs: finalLogs,
-        scrollIntoViewId: lastIndex >= 0 ? `log-${lastIndex}` : ''
-      });
+      if (finalLogs.length >= this._logAutoScrollMinItems) {
+        // 使用单调递增的 scroll-top，避免安卓在内容未满时反复重新定位。
+        this._logScrollTopValue += 1000;
+        updateData.logScrollTop = this._logScrollTopValue;
+      }
+
+      // 日志框未满时不更新 scroll-top，避免安卓把内层滚动变化传递给主页面。
+      this.setData(updateData);
     }, 80);
   },
 
@@ -962,9 +1002,9 @@ Page({
     const w = this.data.plotCanvasW;
     const h = this.data.plotCanvasH;
   
-    if (!w || !h) return;
+    if (!w || !h || !this._plotCanvasContext) return;
   
-    const ctx = wx.createCanvasContext('plot-canvas', this);
+    const ctx = this._plotCanvasContext as any;
   
     const left = 60;
     const right = 15;
@@ -975,7 +1015,7 @@ Page({
     const plotH = h - top - bottom;
   
     ctx.clearRect(0, 0, w, h);
-    ctx.setFillStyle('#141414');
+    ctx.fillStyle = '#141414';
     ctx.fillRect(0, 0, w, h);
   
     const selected: Array<{
@@ -992,22 +1032,20 @@ Page({
     const active = selected.filter(s => s.enabled);
   
     if (active.length === 0) {
-      ctx.setFillStyle('#888');
-      ctx.setFontSize(13);
-      ctx.setTextAlign('center');
+      ctx.fillStyle = '#888';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
       ctx.fillText('请选择要显示的曲线', w / 2, h / 2);
-      ctx.draw();
       return;
     }
   
     const samples = this._plotSamples;
   
     if (samples.length === 0) {
-      ctx.setFillStyle('#888');
-      ctx.setFontSize(13);
-      ctx.setTextAlign('center');
+      ctx.fillStyle = '#888';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
       ctx.fillText('等待 Plot 数据...', w / 2, h / 2);
-      ctx.draw();
       return;
     }
   
@@ -1023,7 +1061,6 @@ Page({
     }
   
     if (!isFinite(minV) || !isFinite(maxV)) {
-      ctx.draw();
       return;
     }
   
@@ -1036,7 +1073,7 @@ Page({
       minV -= pad;
     }
   
-    ctx.setLineWidth(1);
+    ctx.lineWidth = 1;
   
     const gridCount = 4; 
     for (let i = 0; i <= gridCount; i++) {
@@ -1044,21 +1081,21 @@ Page({
       const y = top + plotH - ratio * plotH;
       const currentVal = minV + ratio * (maxV - minV);
   
-      ctx.setStrokeStyle(i === 0 || i === gridCount ? '#333333' : '#222222');
+      ctx.strokeStyle = i === 0 || i === gridCount ? '#333333' : '#222222';
       ctx.beginPath();
       ctx.moveTo(left, y);
       ctx.lineTo(left + plotW, y);
       ctx.stroke();
   
-      ctx.setTextAlign('right');
-      ctx.setTextBaseline('middle');
-      ctx.setFontSize(10);
-      ctx.setFillStyle('#888888');
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#888888';
       ctx.fillText(currentVal.toFixed(1), left - 8, y);
     }
   
     const xGridCount = 6;
-    ctx.setStrokeStyle('#222222');
+    ctx.strokeStyle = '#222222';
     for (let j = 1; j < xGridCount; j++) {
       const x = left + (j / xGridCount) * plotW;
       ctx.beginPath();
@@ -1067,7 +1104,7 @@ Page({
       ctx.stroke();
     }
   
-    ctx.setStrokeStyle('#333333');
+    ctx.strokeStyle = '#333333';
     ctx.beginPath();
     ctx.moveTo(left, top);
     ctx.lineTo(left, top + plotH);
@@ -1083,9 +1120,9 @@ Page({
     };
   
     active.forEach((series) => {
-      ctx.setStrokeStyle(series.color);
-      ctx.setLineWidth(2);
-      ctx.setLineJoin('round');
+      ctx.strokeStyle = series.color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
       ctx.beginPath();
   
       samples.forEach((s, i) => {
@@ -1102,26 +1139,24 @@ Page({
       ctx.stroke();
     });
   
-    ctx.setTextAlign('left');
-    ctx.setTextBaseline('top');
-    ctx.setFontSize(11);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = '11px sans-serif';
   
     selected.forEach((series, idx) => {
       const xPos = left + idx * 85;
       if (series.enabled) {
-        ctx.setFillStyle(series.color);
+        ctx.fillStyle = series.color;
         ctx.fillRect(xPos, 8, 10, 6);
-        ctx.setFillStyle('#cfcfcf');
+        ctx.fillStyle = '#cfcfcf';
         ctx.fillText(series.label, xPos + 14, 6);
       } else {
-        ctx.setFillStyle('#333333');
+        ctx.fillStyle = '#333333';
         ctx.fillRect(xPos, 8, 10, 6);
-        ctx.setFillStyle('#555555');
+        ctx.fillStyle = '#555555';
         ctx.fillText(series.label, xPos + 14, 6);
       }
     });
-  
-    ctx.draw();
   },
 
   initReceiveListener() {
@@ -1183,14 +1218,45 @@ Page({
     });
   },
 
+  _removeBluetoothDeviceFoundListener() {
+    if (!this._bluetoothDeviceFoundHandler) return;
+
+    try {
+      wx.offBluetoothDeviceFound(this._bluetoothDeviceFoundHandler);
+    } catch (e) {}
+    this._bluetoothDeviceFoundHandler = null;
+  },
+
+  _stopBluetoothDiscovery(onComplete?: () => void) {
+    this._removeBluetoothDeviceFoundListener();
+
+    wx.stopBluetoothDevicesDiscovery({
+      complete: () => {
+        this.setData({ isScanning: false });
+        if (onComplete) onComplete();
+      }
+    });
+  },
+
   startConnect() {
+    if (this._bleClosing) {
+      wx.showToast({ title: '蓝牙正在重置，请稍候', icon: 'none' });
+      return;
+    }
+
     if (this.data.connected) {
       this.closeBLE();
       return;
     }
 
+    if (this.data.isScanning) {
+      this._stopBluetoothDiscovery();
+      return;
+    }
+
     wx.openBluetoothAdapter({
       success: () => {
+        this._bluetoothAdapterOpen = true;
         this.startDiscovery();
       },
       fail: () => {
@@ -1203,33 +1269,50 @@ Page({
   },
 
   startDiscovery() {
-    this.setData({
-      isScanning: true,
-      devices: []
-    });
+    this._stopBluetoothDiscovery(() => {
+      this.setData({
+        isScanning: true,
+        devices: [],
+        statusMsg: '正在搜索蓝牙设备'
+      });
 
-    wx.startBluetoothDevicesDiscovery({
-      success: () => {
-        wx.onBluetoothDeviceFound((res) => {
-          res.devices.forEach((device) => {
-            if (
-              (device.name || device.localName) &&
-              !this.data.devices.some((d) => d.deviceId === device.deviceId)
-            ) {
-              this.setData({
-                devices: [...this.data.devices, device]
-              });
-            }
-          });
+      this._bluetoothDeviceFoundHandler = (res: any) => {
+        const found = res.devices.filter(
+          (device: any) => device.name || device.localName
+        );
+        if (found.length === 0) return;
+
+        const byId: { [key: string]: any } = {};
+        this.data.devices.forEach((device: any) => {
+          byId[device.deviceId] = device;
         });
-      }
+        found.forEach((device: any) => {
+          byId[device.deviceId] = device;
+        });
+        this.setData({ devices: Object.keys(byId).map(id => byId[id]) });
+      };
+
+      wx.onBluetoothDeviceFound(this._bluetoothDeviceFoundHandler);
+
+      wx.startBluetoothDevicesDiscovery({
+        allowDuplicatesKey: false,
+        success: () => {},
+        fail: () => {
+          this._removeBluetoothDeviceFoundListener();
+          this.setData({
+            isScanning: false,
+            statusMsg: '搜索失败，请重新打开蓝牙'
+          });
+          wx.showToast({ title: '蓝牙搜索失败', icon: 'none' });
+        }
+      });
     });
   },
 
   handleConnect(e: any) {
     const { id: deviceId } = e.currentTarget.dataset;
 
-    wx.stopBluetoothDevicesDiscovery();
+    this._stopBluetoothDiscovery();
 
     wx.showLoading({
       title: '连接中...'
@@ -1243,6 +1326,7 @@ Page({
       },
       fail: () => {
         wx.hideLoading();
+        this.setData({ statusMsg: '连接失败，请重新搜索' });
       }
     });
   },
@@ -1282,16 +1366,14 @@ Page({
             });
 
             wx.hideLoading();
+            this.initReceiveListener();
+            wx.nextTick(() => this.initPlotCanvasNode());
+
+            /* MTU 调整是优化项，初始化监听/画布不依赖其回调。 */
             wx.setBLEMTU({
               deviceId: this._deviceId,
-              mtu: 128,
-              complete: () => {
-                this.initReceiveListener();
-                this.drawPlotChart();
-              }
+              mtu: 128
             });
-            this.initReceiveListener();
-            this.drawPlotChart();
           }
         });
       }
@@ -1299,6 +1381,10 @@ Page({
   },
 
   closeBLE() {
+    if (this._bleClosing) return;
+    this._bleClosing = true;
+    this.setData({ statusMsg: '正在断开并重置蓝牙...' });
+
     this.stopSendTimer();
     this._cancelMotionStopCommand();
     this._clearRunAckTimer();
@@ -1324,6 +1410,11 @@ Page({
     this._gyroCommandAttempts = 0;
     this._motionStopId = 0;
     this._motionStopAttempts = 0;
+    this._plotCanvasNode = null;
+    this._plotCanvasContext = null;
+    this._logScrollTopValue = 0;
+
+    this._stopBluetoothDiscovery();
 
     try {
       if (this._bleValueChangeHandler) {
@@ -1333,8 +1424,35 @@ Page({
 
     if (this._deviceId) {
       wx.closeBLEConnection({
-        deviceId: this._deviceId
+        deviceId: this._deviceId,
+        complete: () => {
+          this._deviceId = '';
+          this._serviceId = '';
+          this._characteristicId = '';
+
+          if (this._bluetoothAdapterOpen) {
+            wx.closeBluetoothAdapter({
+              complete: () => {
+                this._bluetoothAdapterOpen = false;
+                this._bleClosing = false;
+                this.setData({ statusMsg: '蓝牙已断开，可重新搜索' });
+              }
+            });
+          } else {
+            this._bleClosing = false;
+          }
+        }
       });
+    } else if (this._bluetoothAdapterOpen) {
+      wx.closeBluetoothAdapter({
+        complete: () => {
+          this._bluetoothAdapterOpen = false;
+          this._bleClosing = false;
+          this.setData({ statusMsg: '蓝牙已断开，可重新搜索' });
+        }
+      });
+    } else {
+      this._bleClosing = false;
     }
 
     if (this._flushTimer) {
@@ -1354,6 +1472,7 @@ Page({
     this.setData({
       connected: false,
       statusMsg: '蓝牙未连接',
+      isScanning: false,
       runFlag: 0,
       runCommandPending: false,
       stickX: 0,
@@ -1364,9 +1483,8 @@ Page({
       gyroCalibrationStatus: '未标定（断电后需重新标定）',
       devices: [],
       receivedMsgs: [],
-      scrollIntoViewId: ''
+      scrollIntoViewId: '',
+      logScrollTop: 0
     });
-
-    this.drawPlotChart();
   }
 });

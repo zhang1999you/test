@@ -1,5 +1,7 @@
 {
   "usingComponents": {},
   "navigationBarTitleText": "平衡车控制器",
-  "disableScroll": true
+  "renderer": "webview",
+  "disableScroll": false,
+  "enablePullDownRefresh": false
 }
