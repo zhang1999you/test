@@ -56,6 +56,9 @@ volatile bool gyroCalibrationBusy = false;
 volatile uint8_t gyroCalibrationResult = 0;
 volatile float gyroXOffset = 0.0f;
 volatile bool runFlag = false;
+volatile uint8_t selfRightState = SELF_RIGHT_STATE_IDLE;
+volatile uint8_t selfRightEvent = SELF_RIGHT_EVENT_NONE;
+volatile float selfRightEventAngle = 0.0f;
 static uint16_t gyroCalibrationCommandId = 0;
 float angleAccOffset = 0.0f;
 
@@ -432,11 +435,35 @@ int main(void)
     int pwmL, pwmR;
     int encDeltaL, encDeltaR;
     long encTotalL, encTotalR;
+    unsigned int selfRightStateSnapshot;
+    uint8_t pendingSelfRightEvent;
+    float pendingSelfRightAngle;
 
 	while (1)
 	{
         
         Parse_PID_Commands();
+
+        /* 起身状态由 5ms 控制中断产生，串口输出放在主循环，避免中断阻塞。 */
+        if (selfRightEvent != SELF_RIGHT_EVENT_NONE)
+        {
+            __disable_irq();
+            pendingSelfRightEvent = selfRightEvent;
+            pendingSelfRightAngle = selfRightEventAngle;
+            selfRightEvent = SELF_RIGHT_EVENT_NONE;
+            __enable_irq();
+
+            if (pendingSelfRightEvent == SELF_RIGHT_EVENT_STARTED)
+                printf("SELF_RIGHT:START,angle=%.1f\r\n", pendingSelfRightAngle);
+            else if (pendingSelfRightEvent == SELF_RIGHT_EVENT_CAPTURED)
+                printf("SELF_RIGHT:DONE,angle=%.1f\r\n", pendingSelfRightAngle);
+            else if (pendingSelfRightEvent == SELF_RIGHT_EVENT_TIMEOUT)
+                printf("SELF_RIGHT:FAIL,TIMEOUT,angle=%.1f\r\n", pendingSelfRightAngle);
+            else if (pendingSelfRightEvent == SELF_RIGHT_EVENT_BAD_ANGLE)
+                printf("SELF_RIGHT:FAIL,ANGLE,angle=%.1f\r\n", pendingSelfRightAngle);
+            else if (pendingSelfRightEvent == SELF_RIGHT_EVENT_FALL_STOP)
+                printf("BALANCE:STOP,FALL,angle=%.1f\r\n", pendingSelfRightAngle);
+        }
 
         if (gyroCalibrationResult != 0)
         {
@@ -484,6 +511,7 @@ int main(void)
                 accOffset = angleAccOffset;
                 gyroRate = gx / 32768.0f * 2000.0f;
                 gyroOffset = gyroXOffset;
+                selfRightStateSnapshot = selfRightState;
 
                 pwmL   = PWML;
                 pwmR   = PWMR;
@@ -503,12 +531,12 @@ int main(void)
                     "sErr=%.1f sI=%.1f sOut=%.1f sPWM=%.1f | "
                     "aOff=%.2f acc=%.2f aRef=%.2f ang=%.2f "
                     "aErr=%.2f aOut=%.1f | "
-                    "gOff=%.1f gyro=%.1f enc=%d,%d pos=%ld,%ld pwm=%d,%d\r\n",
+                    "gOff=%.1f gyro=%.1f sr=%u enc=%d,%d pos=%ld,%ld pwm=%d,%d\r\n",
                     cmd, ref, vraw, vf,
                     speedError, speedIntegral, spdOut, off,
                     accOffset, accAngle, angRef, ang,
                     angleError, angOut,
-                    gyroOffset, gyroRate,
+                    gyroOffset, gyroRate, selfRightStateSnapshot,
                     encDeltaL, encDeltaR, encTotalL, encTotalR,
                     pwmL, pwmR);
                             }
@@ -523,23 +551,8 @@ int main(void)
         
         if(runFlag && !runFlagLast)//突然站立的过程
         {
-            PID_Init(&AnglePID);
+            /* PID 初始化和起身判定统一放在 TIM1 控制中断，避免与电机输出竞争。 */
             printf("goRunning\r\n"); 
-            // if(angle>20)
-            // {
-            //     Motor_SetPWM(1, -60);
-            //     Motor_SetPWM(2, -60);
-            // }
-            // else
-            // {
-            //     Motor_SetPWM(1, 80);
-            //     Motor_SetPWM(2, 80);
-            // }
-        }
-        if (fabsf(angle) > 35.0f)
-        {
-            runFlag = false;
-            speedAngleOffset = 0.0f;
         }
         runFlagLast=runFlag;
 

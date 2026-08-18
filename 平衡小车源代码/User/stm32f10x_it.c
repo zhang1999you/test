@@ -267,6 +267,31 @@ volatile int32_t encoderTotalL = 0, encoderTotalR = 0;
 #define GYRO_CALIBRATION_SAMPLES       400U
 #define GYRO_CALIBRATION_MAX_RAW_SPAN  250
 
+static void ResetDriveControllers(void)
+{
+    speedAngleOffset = 0.0f;
+    speedAveFiltered = 0.0f;
+    turnTargetFiltered = 0.0f;
+    turnSpeedFiltered = 0.0f;
+    speedEmergencyBrake = false;
+    speedCommandCmS = 0.0f;
+    turnCommandDiffCmS = 0.0f;
+    motionCommandWatchdogActive = false;
+    motionCommandAgeMs = 0;
+    motionStopRequest = false;
+    PWMDif = 0;
+    PID_Init(&AnglePID);
+    PID_Init(&SpeedPID);
+    PID_Init(&TurnPID);
+}
+
+static void PublishSelfRightEvent(uint8_t event, float eventAngle)
+{
+    /* 先写角度、最后写事件，主循环可读取同一次状态变化。 */
+    selfRightEventAngle = eventAngle;
+    selfRightEvent = event;
+}
+
 void TIM1_UP_IRQHandler(void)
 {
     static uint8_t global_tick = 0; // 统一的低频任务节拍器
@@ -277,6 +302,8 @@ void TIM1_UP_IRQHandler(void)
     static int32_t gyroCalibrationSum = 0;
     static int16_t gyroCalibrationMin = 32767;
     static int16_t gyroCalibrationMax = -32768;
+    static bool controlRunLast = false;
+    static uint16_t selfRightTicks = 0;
     if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET)
     {
         float correctedGx;
@@ -359,8 +386,100 @@ void TIM1_UP_IRQHandler(void)
             angleGyro = angle + correctedGx / 32768.0f * 2000.0f * 0.005f;
             angle = FILTER_ALPHA * angleAcc + (1.0f - FILTER_ALPHA) * angleGyro;
         }
-        // 2. 角度环
-        if (runFlag)
+
+        /* 开始运行的上升沿：决定直接平衡、自动起身或拒绝危险姿态。 */
+        if (runFlag && !controlRunLast)
+        {
+            float startAbsAngle = fabsf(angle);
+
+            ResetDriveControllers();
+            selfRightTicks = 0;
+            selfRightState = SELF_RIGHT_STATE_IDLE;
+
+            if (startAbsAngle > BALANCE_FALL_ANGLE_DEG)
+            {
+                if (startAbsAngle <= SELF_RIGHT_MAX_START_ANGLE_DEG)
+                {
+                    selfRightState = SELF_RIGHT_STATE_DRIVE;
+                    PublishSelfRightEvent(SELF_RIGHT_EVENT_STARTED, angle);
+                }
+                else
+                {
+                    runFlag = false;
+                    PublishSelfRightEvent(SELF_RIGHT_EVENT_BAD_ANGLE, angle);
+                }
+            }
+        }
+
+        if (!runFlag)
+        {
+            selfRightState = SELF_RIGHT_STATE_IDLE;
+            selfRightTicks = 0;
+        }
+        else if (selfRightState == SELF_RIGHT_STATE_DRIVE)
+        {
+            float selfRightAbsAngle = fabsf(angle);
+
+            if (selfRightAbsAngle <= SELF_RIGHT_CAPTURE_ANGLE_DEG)
+            {
+                /* 已进入直立 PID 可捕获范围，清除起身期间的速度和积分。 */
+                selfRightState = SELF_RIGHT_STATE_IDLE;
+                selfRightTicks = 0;
+                ResetDriveControllers();
+                PublishSelfRightEvent(SELF_RIGHT_EVENT_CAPTURED, angle);
+            }
+            else if (selfRightAbsAngle > SELF_RIGHT_ABORT_ANGLE_DEG)
+            {
+                /* 角度继续远离直立方向，立即停止。 */
+                selfRightState = SELF_RIGHT_STATE_IDLE;
+                runFlag = false;
+                ResetDriveControllers();
+                PublishSelfRightEvent(SELF_RIGHT_EVENT_BAD_ANGLE, angle);
+            }
+            else
+            {
+                selfRightTicks++;
+                if (selfRightTicks >= SELF_RIGHT_TIMEOUT_TICKS)
+                {
+                    selfRightState = SELF_RIGHT_STATE_IDLE;
+                    runFlag = false;
+                    ResetDriveControllers();
+                    PublishSelfRightEvent(SELF_RIGHT_EVENT_TIMEOUT, angle);
+                }
+            }
+        }
+
+        /* 普通平衡阶段保留倾倒保护；起身阶段使用专用范围和超时保护。 */
+        if (runFlag && selfRightState != SELF_RIGHT_STATE_DRIVE &&
+            fabsf(angle) > BALANCE_FALL_ANGLE_DEG)
+        {
+            runFlag = false;
+            ResetDriveControllers();
+            PublishSelfRightEvent(SELF_RIGHT_EVENT_FALL_STOP, angle);
+        }
+
+        // 2. 角度环 / 自动起身
+        if (runFlag && selfRightState == SELF_RIGHT_STATE_DRIVE)
+        {
+            int8_t selfRightPwm;
+            int pwmMagnitude =
+                (fabsf(angle) > SELF_RIGHT_PWM_REDUCE_ANGLE_DEG) ?
+                SELF_RIGHT_PWM_HIGH : SELF_RIGHT_PWM_LOW;
+
+            selfRightPwm = (angle > 0.0f) ?
+                           (int8_t)(-pwmMagnitude * SELF_RIGHT_DIRECTION_SIGN) :
+                           (int8_t)( pwmMagnitude * SELF_RIGHT_DIRECTION_SIGN);
+
+            PWMAve = selfRightPwm;
+            PWML = selfRightPwm;
+            PWMR = selfRightPwm;
+            PWMDif = 0;
+
+            /* 右电机在整车坐标中需要反号，保证两轮向同一方向推车身。 */
+            Motor_SetPWM(1, PWML);
+            Motor_SetPWM(2, -PWMR);
+        }
+        else if (runFlag)
         {
             float driveTiltBias;
             float tiltSpeedError;
@@ -423,6 +542,8 @@ void TIM1_UP_IRQHandler(void)
             PWMAve = 0;
             PID_Init(&AnglePID);
         }
+
+        controlRunLast = runFlag;
         // GPIO_ResetBits(GPIOB, GPIO_Pin_0);//调试用，查看中断频率
 
         global_tick++;//
@@ -478,7 +599,7 @@ void TIM1_UP_IRQHandler(void)
               speedAngleOffset = 0.0f;
           }
 
-          if (runFlag)
+          if (runFlag && selfRightState != SELF_RIGHT_STATE_DRIVE)
           {
               float targetStep;
               float targetDelta;

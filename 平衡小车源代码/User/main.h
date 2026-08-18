@@ -40,6 +40,35 @@ void Parse_PID_Commands(void);
 #define DRIVE_START_ANGLE_ERR_DEG    0.4f
 #define MOTION_COMMAND_TIMEOUT_MS     500U
 
+/* 自动起身：TIM1 控制周期为 5ms。 */
+#define CONTROL_LOOP_PERIOD_MS              5U
+#define BALANCE_FALL_ANGLE_DEG              35.0f
+#define SELF_RIGHT_CAPTURE_ANGLE_DEG        18.0f
+#define SELF_RIGHT_PWM_REDUCE_ANGLE_DEG     28.0f
+#define SELF_RIGHT_MAX_START_ANGLE_DEG     120.0f
+#define SELF_RIGHT_ABORT_ANGLE_DEG         135.0f
+#define SELF_RIGHT_TIMEOUT_MS             2000U
+#define SELF_RIGHT_TIMEOUT_TICKS \
+    (SELF_RIGHT_TIMEOUT_MS / CONTROL_LOOP_PERIOD_MS)
+
+/*
+ * angle > 0 时默认给逻辑负 PWM，沿用原起身代码的方向约定。
+ * 如果实车首次测试时向地面压得更紧，只需把 1 改成 -1。
+ */
+#define SELF_RIGHT_DIRECTION_SIGN            1
+#define SELF_RIGHT_PWM_HIGH                  99
+#define SELF_RIGHT_PWM_LOW                   72
+
+#define SELF_RIGHT_STATE_IDLE                 0U
+#define SELF_RIGHT_STATE_DRIVE                1U
+
+#define SELF_RIGHT_EVENT_NONE                 0U
+#define SELF_RIGHT_EVENT_STARTED              1U
+#define SELF_RIGHT_EVENT_CAPTURED             2U
+#define SELF_RIGHT_EVENT_TIMEOUT              3U
+#define SELF_RIGHT_EVENT_BAD_ANGLE            4U
+#define SELF_RIGHT_EVENT_FALL_STOP            5U
+
 extern volatile float speedCommandCmS;
 extern volatile float turnCommandDiffCmS;
 extern volatile uint16_t motionCommandAgeMs;
@@ -50,6 +79,9 @@ extern volatile bool gyroCalibrationRequest;
 extern volatile bool gyroCalibrationBusy;
 extern volatile uint8_t gyroCalibrationResult;
 extern volatile float gyroXOffset;
+extern volatile uint8_t selfRightState;
+extern volatile uint8_t selfRightEvent;
+extern volatile float selfRightEventAngle;
 
 
 extern short Accel[3];
