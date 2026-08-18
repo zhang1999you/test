@@ -426,17 +426,12 @@ int main(void)
 
 
 
-    float cmd, ref, vraw, vf, spdOut, spdLim, off;
-    float angRef, ang, angOut;
-    float accAngle, gyroRate;
-    int pwmL, pwmR, turn;
-    float turnRef, turnActual, turnOut;
-    int emergencyBrake;
+    float cmd, ref, vraw, vf, speedError, speedIntegral, spdOut, off;
+    float angRef, ang, angleError, angOut;
+    float accAngle, accOffset, gyroRate, gyroOffset;
+    int pwmL, pwmR;
     int encDeltaL, encDeltaR;
-    float vl, vr;
-    int basePwm;
     long encTotalL, encTotalR;
-    unsigned int ccrL, ccrR, dirBits;
 
 	while (1)
 	{
@@ -468,60 +463,54 @@ int main(void)
 		if(swTimers[1].flag)//打印 当前状态
 		{
 			swTimers[1].flag = 0;
-            bool debugStd=1;
+            bool debugStd=0;
             if(debugStd && !gyroCalibrationBusy)
             {
                 __disable_irq();   // 只在复制变量时短暂关闭中断
-                vl      = SPEEDL;
-                vr      = SPEEDR;
-                basePwm = PWMAve;
-
                 cmd    = speedCommandCmS;
                 ref    = SpeedPID.Target;
                 vraw   = SPEEDAve;
                 vf     = SpeedPID.Actual;
+                speedError = ref - vf;
+                speedIntegral = SpeedPID.ErrorInt;
                 spdOut = SpeedPID.Out;
-                spdLim = SpeedPID.OutMax;
                 off    = speedAngleOffset;
 
                 angRef = AnglePID.Target;
                 ang    = AnglePID.Actual;
+                angleError = angRef - ang;
                 angOut = AnglePID.Out;
                 accAngle = angleAcc;
+                accOffset = angleAccOffset;
                 gyroRate = gx / 32768.0f * 2000.0f;
+                gyroOffset = gyroXOffset;
 
                 pwmL   = PWML;
                 pwmR   = PWMR;
-                turn   = PWMDif;
-                turnRef = TurnPID.Target;
-                turnActual = TurnPID.Actual;
-                turnOut = TurnPID.Out;
-                emergencyBrake = speedEmergencyBrake ? 1 : 0;
                 encDeltaL = encoderDeltaL;
                 encDeltaR = encoderDeltaR;
                 encTotalL = (long)encoderTotalL;
                 encTotalR = (long)encoderTotalR;
-                ccrL = (unsigned int)TIM4->CCR3;
-                ccrR = (unsigned int)TIM4->CCR4;
-                dirBits = (unsigned int)((GPIOB->ODR >> 12) & 0x0F);
 
                 __enable_irq();    // 必须在 printf 前立刻恢复中断
 
-                printf("cmd=%.1f ref=%.1f raw=%.1f v=%.1f "
-                    "spdOut=%.2f lim=%.1f spdPWM=%.2f | "
-                    "angRef=%.2f ang=%.2f angOut=%.1f "
-                    "pwm=%d,%d turn=%.1f/%.1f/%.1f/%d | "
-                    "L=%.1f R=%.1f base=%d | "
-                    "acc=%.2f gyro=%.1f cnt=%d,%d pos=%ld,%ld "
-                    "ccr=%u,%u dir=%X ebrake=%d\r\n",
+                /*
+                 * 低频闭环诊断：
+                 * sI 可判断速度积分是否在零指令下持续累积；
+                 * aOff/aErr 可区分机械平衡角偏差与 gx 零漂。
+                 */
+                printf("DBG cmd=%.1f sRef=%.1f raw=%.1f v=%.1f "
+                    "sErr=%.1f sI=%.1f sOut=%.1f sPWM=%.1f | "
+                    "aOff=%.2f acc=%.2f aRef=%.2f ang=%.2f "
+                    "aErr=%.2f aOut=%.1f | "
+                    "gOff=%.1f gyro=%.1f enc=%d,%d pos=%ld,%ld pwm=%d,%d\r\n",
                     cmd, ref, vraw, vf,
-                    spdOut, spdLim, off,
-                    angRef, ang, angOut,
-                    pwmL, pwmR, turnRef, turnActual, turnOut, turn,
-                    vl, vr, basePwm,
-                    accAngle, gyroRate,
+                    speedError, speedIntegral, spdOut, off,
+                    accOffset, accAngle, angRef, ang,
+                    angleError, angOut,
+                    gyroOffset, gyroRate,
                     encDeltaL, encDeltaR, encTotalL, encTotalR,
-                    ccrL, ccrR, dirBits, emergencyBrake);
+                    pwmL, pwmR);
                             }
             else
             {

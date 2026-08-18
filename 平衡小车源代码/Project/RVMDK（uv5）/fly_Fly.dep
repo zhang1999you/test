@@ -698,7 +698,7 @@ I (..\..\Libraries\FWlib\inc\stm32f10x_spi.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\stm32f10x_tim.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\stm32f10x_usart.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\misc.h)(0x69A388EC)
-F (..\..\User\main.c)(0x6A7C9B7C)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\main.o --omf_browse .\main.crf --depend .\main.d)
+F (..\..\User\main.c)(0x6A846167)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\main.o --omf_browse .\main.crf --depend .\main.d)
 I (..\..\User\stm32f10x_it.h)(0x6A7C9C49)
 I (..\..\Libraries\CMSIS\stm32f10x.h)(0x69A388EC)
 I (..\..\Libraries\CMSIS\core_cm3.h)(0x69A388EC)
@@ -742,7 +742,7 @@ I (..\..\User\oled/OLED_Data.h)(0x69A388EC)
 I (..\..\User\timer/Timer.h)(0x6A0F9071)
 I (..\..\User\usart/bsp_usart_blt.h)(0x69E96AA0)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x53463A44)
-I (..\..\User\usart/bsp_debug_usart.h)(0x6A7A7033)
+I (..\..\User\usart/bsp_debug_usart.h)(0x6A7CB148)
 I (..\..\User\motor/Motor.h)(0x69A3D1C5)
 I (..\..\User\motor/Encoder.h)(0x69B8DBD0)
 F (..\..\User\stm32f10x_conf.h)(0x69A388EC)()
@@ -817,7 +817,7 @@ I (..\..\Libraries\FWlib\inc\stm32f10x_usart.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\stm32f10x_wwdg.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\misc.h)(0x69A388EC)
 F (..\..\User\usart\bsp_debug_usart.c)(0x69CE9744)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\bsp_debug_usart.o --omf_browse .\bsp_debug_usart.crf --depend .\bsp_debug_usart.d)
-I (..\..\User\usart\bsp_debug_usart.h)(0x6A7A7033)
+I (..\..\User\usart\bsp_debug_usart.h)(0x6A7CB148)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (..\..\Libraries\CMSIS\stm32f10x.h)(0x69A388EC)
 I (..\..\Libraries\CMSIS\core_cm3.h)(0x69A388EC)
@@ -879,7 +879,7 @@ I (..\..\Libraries\FWlib\inc\stm32f10x_wwdg.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\misc.h)(0x69A388EC)
 I (..\..\User\iic/bsp_hard_i2c.h)(0x69A388EC)
 I (..\..\User\delay.h)(0x69A388EC)
-I (..\..\User\usart/bsp_debug_usart.h)(0x6A7A7033)
+I (..\..\User\usart/bsp_debug_usart.h)(0x6A7CB148)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (..\..\User\motor/PWM.h)(0x69B0C23C)
 F (..\..\User\iic\bsp_hard_i2c.c)(0x69A388EC)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\bsp_hard_i2c.o --omf_browse .\bsp_hard_i2c.crf --depend .\bsp_hard_i2c.d)
@@ -912,7 +912,7 @@ I (..\..\Libraries\FWlib\inc\stm32f10x_tim.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\stm32f10x_usart.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\stm32f10x_wwdg.h)(0x69A388EC)
 I (..\..\Libraries\FWlib\inc\misc.h)(0x69A388EC)
-I (..\..\User\usart/bsp_debug_usart.h)(0x6A7A7033)
+I (..\..\User\usart/bsp_debug_usart.h)(0x6A7CB148)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (..\..\User\mpu6050/mpu6050.h)(0x69A388EC)
 F (..\..\User\hc05\bsp_hc05.c)(0x69A388EC)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\bsp_hc05.o --omf_browse .\bsp_hc05.crf --depend .\bsp_hc05.d)
@@ -948,7 +948,7 @@ I (..\..\Libraries\FWlib\inc\misc.h)(0x69A388EC)
 I (D:\Keil_v5\ARM\ARMCC\include\string.h)(0x53463A44)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (..\..\User\usart/bsp_usart_blt.h)(0x69E96AA0)
-I (..\..\User\usart/bsp_debug_usart.h)(0x6A7A7033)
+I (..\..\User\usart/bsp_debug_usart.h)(0x6A7CB148)
 I (..\..\User\delay.h)(0x69A388EC)
 F (..\..\User\iic\bsp_soft_i2c.c)(0x69A388EC)(--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I..\..\User -I..\..\Libraries\FWlib\inc -I..\..\Libraries\CMSIS -I..\..\User\usart --no-multibyte-chars-I D:\Keil_v5\ARM\RV31\INC-I D:\Keil_v5\ARM\PACK\ARM\CMSIS\4.1.0\CMSIS\Include-I D:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.1.0\Device\Include-DSTM32F10X_MD -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\bsp_soft_i2c.o --omf_browse .\bsp_soft_i2c.crf --depend .\bsp_soft_i2c.d)
 I (..\..\Libraries\CMSIS\stm32f10x.h)(0x69A388EC)
